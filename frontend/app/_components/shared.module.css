@@ -1,0 +1,28 @@
+.brand {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-weight: 700;
+  letter-spacing: -.02em;
+}
+
+.brandCompact {
+  padding: 0 10px 32px;
+  font-size: 15px;
+}
+
+.brandMark {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  color: white;
+  background: var(--green);
+  border-radius: 8px;
+}
+
+.compact {
+  width: 25px;
+  height: 25px;
+  border-radius: 7px;
+}

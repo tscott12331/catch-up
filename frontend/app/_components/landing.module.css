@@ -1,0 +1,249 @@
+.landingShell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  position: relative;
+  overflow: hidden;
+}
+
+.landingShell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: .45;
+  background-image: radial-gradient(#d5d8d5 .7px, transparent .7px);
+  background-size: 17px 17px;
+  mask-image: linear-gradient(to bottom, transparent, black 25%, black 75%, transparent);
+}
+
+.landingTopbar,
+.landingContent,
+.landingFooter {
+  position: relative;
+  z-index: 1;
+}
+
+.landingTopbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 28px 52px;
+}
+
+.topbarNote {
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: .03em;
+}
+
+.landingContent {
+  width: min(680px, calc(100% - 40px));
+  margin: auto;
+  padding: 56px 0 90px;
+  text-align: center;
+}
+
+.eyebrow {
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+}
+
+.eyebrowDot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  vertical-align: 1px;
+}
+
+.landingContent h1 {
+  margin: 24px 0 19px;
+  font-family: Georgia, serif;
+  font-size: clamp(48px, 7vw, 76px);
+  font-weight: 400;
+  letter-spacing: -.055em;
+  line-height: .99;
+}
+
+.landingContent h1 em {
+  color: var(--green);
+  font-style: italic;
+}
+
+.landingCopy {
+  max-width: 480px;
+  margin: 0 auto 42px;
+  color: #6e7676;
+  font-size: 16px;
+  line-height: 1.65;
+}
+
+.repoForm {
+  margin: auto;
+  max-width: 560px;
+  text-align: left;
+}
+
+.repoForm label {
+  display: block;
+  margin-bottom: 9px;
+  color: #676e70;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.urlInputWrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 7px 6px 17px;
+  background: white;
+  border: 1px solid #d9ddda;
+  border-radius: 12px;
+  box-shadow: 0 8px 25px rgba(45, 61, 54, .07);
+  color: #67736e;
+}
+
+.urlInputWrap:focus-within {
+  border-color: #88ab98;
+  box-shadow: 0 0 0 3px rgba(78,126,105,.12);
+}
+
+.urlInputWrap input {
+  min-width: 0;
+  flex: 1;
+  padding: 10px 0;
+  border: 0;
+  outline: 0;
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.urlInputWrap input::placeholder {
+  color: #aeb4b1;
+}
+
+.connectButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px 16px;
+  border: 0;
+  border-radius: 8px;
+  color: white;
+  background: var(--green);
+  font-size: 13px;
+  font-weight: 700;
+  transition: background .2s, transform .2s;
+}
+
+.connectButton:hover {
+  background: #3d6955;
+  transform: translateY(-1px);
+}
+
+.connectButton:disabled,
+.demoLink:disabled {
+  cursor: wait;
+  opacity: .65;
+}
+
+.formHint,
+.formError {
+  margin: 10px 3px 0;
+  font-size: 12px;
+}
+
+.formHint {
+  color: #9ba29f;
+}
+
+.formError {
+  color: #b85b50;
+}
+
+.demoLink {
+  margin-top: 28px;
+  padding: 0;
+  border: 0;
+  color: #707a75;
+  background: transparent;
+  font-size: 13px;
+}
+
+.demoLink:hover {
+  color: var(--green);
+}
+
+.demoLink span {
+  margin-left: 5px;
+  font-size: 15px;
+}
+
+.landingFooter {
+  display: flex;
+  justify-content: space-between;
+  padding: 23px 52px;
+  border-top: 1px solid rgba(213,217,213,.75);
+  color: #a2a8a5;
+  font-size: 11px;
+  letter-spacing: .04em;
+}
+
+.landingFooter span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+@media (max-width: 760px) {
+  .landingTopbar {
+    padding: 22px 20px;
+  }
+
+  .topbarNote {
+    display: none;
+  }
+
+  .landingContent {
+    padding-top: 45px;
+  }
+
+  .landingFooter {
+    padding-inline: 20px;
+  }
+
+  .landingFooter span:last-child {
+    display: none;
+  }
+}
+
+@media (max-width: 430px) {
+  .urlInputWrap {
+    flex-wrap: wrap;
+    padding: 6px 7px 7px 13px;
+  }
+
+  .urlInputWrap input {
+    width: calc(100% - 35px);
+    flex: initial;
+  }
+
+  .connectButton {
+    width: 100%;
+  }
+
+  .landingContent h1 {
+    font-size: 49px;
+  }
+}
