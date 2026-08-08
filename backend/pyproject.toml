@@ -7,3 +7,9 @@ requires-python = ">=3.13"
 dependencies = [
     "fastapi[standard]>=0.141.1",
 ]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+]

@@ -37,4 +37,9 @@ Useful checks:
 ```bash
 bun run lint
 bun run build
+bun run test
+bun run contract:check
 ```
+
+After a backend API contract update, regenerate the tracked frontend OpenAPI
+types with `bun run contract:generate`.

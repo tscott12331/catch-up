@@ -9,7 +9,7 @@ import re
 import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 from urllib.parse import unquote, urlsplit
 
 import uvicorn
@@ -18,7 +18,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 try:
@@ -81,6 +81,43 @@ class WorkspaceResponse(BaseModel):
 class FileResponse(BaseModel):
     path: str
     content: str
+
+
+class ErrorDetail(BaseModel):
+    code: str
+    message: str
+    details: Any | None = None
+
+
+class ErrorResponse(BaseModel):
+    error: ErrorDetail
+
+
+class MessageStartedEvent(BaseModel):
+    type: Literal["message.started"]
+    message_id: str
+
+
+class MessageDeltaEvent(BaseModel):
+    type: Literal["message.delta"]
+    text: str
+
+
+class MessageCompletedEvent(BaseModel):
+    type: Literal["message.completed"]
+    citations: list[Citation]
+
+
+class MessageErrorEvent(BaseModel):
+    type: Literal["message.error"]
+    code: str | None = None
+    message: str | None = None
+
+
+ChatSseEvent = Annotated[
+    MessageStartedEvent | MessageDeltaEvent | MessageCompletedEvent | MessageErrorEvent,
+    Field(discriminator="type"),
+]
 
 
 TreeNode.model_rebuild()

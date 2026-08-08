@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { components } from "./generated/openapi";
 
 export type IconName =
   | "arrow-up"
@@ -21,50 +22,23 @@ export type IconName =
   | "sparkle"
   | "x";
 
-export type Citation = {
-  file: string;
-  start_line: number;
-  end_line: number;
-};
+export type Citation = components["schemas"]["Citation"];
 
-export type ChatMessage = {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  citations?: Citation[];
+export type ChatMessage = components["schemas"]["ChatMessage"] & {
   error?: string;
   retryQuestion?: string;
 };
 
-export type TreeNode = {
-  name: string;
-  type: "file" | "folder";
-  children?: TreeNode[];
-};
+export type TreeNode = components["schemas"]["TreeNode"];
 
-export type RepositoryIdentity = {
-  id: string;
-  owner: string;
-  name: string;
-  url: string;
-  default_branch: string;
-};
+export type RepositoryIdentity = components["schemas"]["RepositoryIdentity"];
 
-export type JobStatus = "queued" | "indexing" | "completed" | "failed";
+export type JobStatus = components["schemas"]["IndexingJob"]["status"];
 
-export type IndexingJob = {
-  id: string;
-  status: JobStatus;
-  progress: number;
-};
+export type IndexingJob = components["schemas"]["IndexingJob"];
 
-export type WorkspacePayload = {
-  repository: RepositoryIdentity;
-  tree: TreeNode[];
-  selected_file: string;
-  starter_questions: string[];
+export type WorkspacePayload = Omit<components["schemas"]["WorkspaceResponse"], "messages"> & {
   messages: ChatMessage[];
-  job: IndexingJob;
 };
 
 export type IconPathMap = Record<IconName, ReactNode>;

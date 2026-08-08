@@ -1,0 +1,608 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schemas": {
+    "ChatMessage": {
+      "$defs": {
+        "Citation": {
+          "properties": {
+            "end_line": {
+              "title": "End Line",
+              "type": "integer"
+            },
+            "file": {
+              "title": "File",
+              "type": "string"
+            },
+            "start_line": {
+              "title": "Start Line",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "file",
+            "start_line",
+            "end_line"
+          ],
+          "title": "Citation",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "citations": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/Citation"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Citations"
+        },
+        "content": {
+          "title": "Content",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "user",
+            "assistant"
+          ],
+          "title": "Role",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "role",
+        "content"
+      ],
+      "title": "ChatMessage",
+      "type": "object"
+    },
+    "ChatRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "question": {
+          "default": "",
+          "title": "Question",
+          "type": "string"
+        },
+        "repository_id": {
+          "default": "",
+          "title": "Repository Id",
+          "type": "string"
+        }
+      },
+      "title": "ChatRequest",
+      "type": "object"
+    },
+    "Citation": {
+      "properties": {
+        "end_line": {
+          "title": "End Line",
+          "type": "integer"
+        },
+        "file": {
+          "title": "File",
+          "type": "string"
+        },
+        "start_line": {
+          "title": "Start Line",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "file",
+        "start_line",
+        "end_line"
+      ],
+      "title": "Citation",
+      "type": "object"
+    },
+    "ErrorDetail": {
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "details": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Details"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "title": "ErrorDetail",
+      "type": "object"
+    },
+    "ErrorResponse": {
+      "$defs": {
+        "ErrorDetail": {
+          "properties": {
+            "code": {
+              "title": "Code",
+              "type": "string"
+            },
+            "details": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Details"
+            },
+            "message": {
+              "title": "Message",
+              "type": "string"
+            }
+          },
+          "required": [
+            "code",
+            "message"
+          ],
+          "title": "ErrorDetail",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "error": {
+          "$ref": "#/$defs/ErrorDetail"
+        }
+      },
+      "required": [
+        "error"
+      ],
+      "title": "ErrorResponse",
+      "type": "object"
+    },
+    "FileResponse": {
+      "properties": {
+        "content": {
+          "title": "Content",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "content"
+      ],
+      "title": "FileResponse",
+      "type": "object"
+    },
+    "IndexingJob": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "progress": {
+          "title": "Progress",
+          "type": "integer"
+        },
+        "status": {
+          "enum": [
+            "queued",
+            "indexing",
+            "completed",
+            "failed"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "status",
+        "progress"
+      ],
+      "title": "IndexingJob",
+      "type": "object"
+    },
+    "RepositoryCreateResponse": {
+      "$defs": {
+        "IndexingJob": {
+          "properties": {
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "progress": {
+              "title": "Progress",
+              "type": "integer"
+            },
+            "status": {
+              "enum": [
+                "queued",
+                "indexing",
+                "completed",
+                "failed"
+              ],
+              "title": "Status",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "status",
+            "progress"
+          ],
+          "title": "IndexingJob",
+          "type": "object"
+        },
+        "RepositoryIdentity": {
+          "properties": {
+            "default_branch": {
+              "title": "Default Branch",
+              "type": "string"
+            },
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "owner": {
+              "title": "Owner",
+              "type": "string"
+            },
+            "url": {
+              "title": "Url",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "owner",
+            "name",
+            "url",
+            "default_branch"
+          ],
+          "title": "RepositoryIdentity",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "job": {
+          "$ref": "#/$defs/IndexingJob"
+        },
+        "repository": {
+          "$ref": "#/$defs/RepositoryIdentity"
+        }
+      },
+      "required": [
+        "repository",
+        "job"
+      ],
+      "title": "RepositoryCreateResponse",
+      "type": "object"
+    },
+    "RepositoryIdentity": {
+      "properties": {
+        "default_branch": {
+          "title": "Default Branch",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "owner": {
+          "title": "Owner",
+          "type": "string"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "owner",
+        "name",
+        "url",
+        "default_branch"
+      ],
+      "title": "RepositoryIdentity",
+      "type": "object"
+    },
+    "RepositoryRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "default": "",
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "title": "RepositoryRequest",
+      "type": "object"
+    },
+    "TreeNode": {
+      "$defs": {
+        "TreeNode": {
+          "properties": {
+            "children": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/$defs/TreeNode"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Children"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "type": {
+              "enum": [
+                "file",
+                "folder"
+              ],
+              "title": "Type",
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "type"
+          ],
+          "title": "TreeNode",
+          "type": "object"
+        }
+      },
+      "$ref": "#/$defs/TreeNode"
+    },
+    "WorkspaceResponse": {
+      "$defs": {
+        "ChatMessage": {
+          "properties": {
+            "citations": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/$defs/Citation"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Citations"
+            },
+            "content": {
+              "title": "Content",
+              "type": "string"
+            },
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "role": {
+              "enum": [
+                "user",
+                "assistant"
+              ],
+              "title": "Role",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "role",
+            "content"
+          ],
+          "title": "ChatMessage",
+          "type": "object"
+        },
+        "Citation": {
+          "properties": {
+            "end_line": {
+              "title": "End Line",
+              "type": "integer"
+            },
+            "file": {
+              "title": "File",
+              "type": "string"
+            },
+            "start_line": {
+              "title": "Start Line",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "file",
+            "start_line",
+            "end_line"
+          ],
+          "title": "Citation",
+          "type": "object"
+        },
+        "IndexingJob": {
+          "properties": {
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "progress": {
+              "title": "Progress",
+              "type": "integer"
+            },
+            "status": {
+              "enum": [
+                "queued",
+                "indexing",
+                "completed",
+                "failed"
+              ],
+              "title": "Status",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "status",
+            "progress"
+          ],
+          "title": "IndexingJob",
+          "type": "object"
+        },
+        "RepositoryIdentity": {
+          "properties": {
+            "default_branch": {
+              "title": "Default Branch",
+              "type": "string"
+            },
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "owner": {
+              "title": "Owner",
+              "type": "string"
+            },
+            "url": {
+              "title": "Url",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "owner",
+            "name",
+            "url",
+            "default_branch"
+          ],
+          "title": "RepositoryIdentity",
+          "type": "object"
+        },
+        "TreeNode": {
+          "properties": {
+            "children": {
+              "anyOf": [
+                {
+                  "items": {
+                    "$ref": "#/$defs/TreeNode"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Children"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "type": {
+              "enum": [
+                "file",
+                "folder"
+              ],
+              "title": "Type",
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "type"
+          ],
+          "title": "TreeNode",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "job": {
+          "$ref": "#/$defs/IndexingJob"
+        },
+        "messages": {
+          "items": {
+            "$ref": "#/$defs/ChatMessage"
+          },
+          "title": "Messages",
+          "type": "array"
+        },
+        "repository": {
+          "$ref": "#/$defs/RepositoryIdentity"
+        },
+        "selected_file": {
+          "title": "Selected File",
+          "type": "string"
+        },
+        "starter_questions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Starter Questions",
+          "type": "array"
+        },
+        "tree": {
+          "items": {
+            "$ref": "#/$defs/TreeNode"
+          },
+          "title": "Tree",
+          "type": "array"
+        }
+      },
+      "required": [
+        "repository",
+        "tree",
+        "selected_file",
+        "starter_questions",
+        "messages",
+        "job"
+      ],
+      "title": "WorkspaceResponse",
+      "type": "object"
+    }
+  },
+  "title": "Catch-up domain schemas"
+}

@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "framing": "Each event is emitted as a single Server-Sent Events data frame containing JSON.",
+  "schema": {
+    "$defs": {
+      "Citation": {
+        "properties": {
+          "end_line": {
+            "title": "End Line",
+            "type": "integer"
+          },
+          "file": {
+            "title": "File",
+            "type": "string"
+          },
+          "start_line": {
+            "title": "Start Line",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "file",
+          "start_line",
+          "end_line"
+        ],
+        "title": "Citation",
+        "type": "object"
+      },
+      "MessageCompletedEvent": {
+        "properties": {
+          "citations": {
+            "items": {
+              "$ref": "#/$defs/Citation"
+            },
+            "title": "Citations",
+            "type": "array"
+          },
+          "type": {
+            "const": "message.completed",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "citations"
+        ],
+        "title": "MessageCompletedEvent",
+        "type": "object"
+      },
+      "MessageDeltaEvent": {
+        "properties": {
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "type": {
+            "const": "message.delta",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "text"
+        ],
+        "title": "MessageDeltaEvent",
+        "type": "object"
+      },
+      "MessageErrorEvent": {
+        "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Code"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Message"
+          },
+          "type": {
+            "const": "message.error",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "title": "MessageErrorEvent",
+        "type": "object"
+      },
+      "MessageStartedEvent": {
+        "properties": {
+          "message_id": {
+            "title": "Message Id",
+            "type": "string"
+          },
+          "type": {
+            "const": "message.started",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "message_id"
+        ],
+        "title": "MessageStartedEvent",
+        "type": "object"
+      }
+    },
+    "discriminator": {
+      "mapping": {
+        "message.completed": "#/$defs/MessageCompletedEvent",
+        "message.delta": "#/$defs/MessageDeltaEvent",
+        "message.error": "#/$defs/MessageErrorEvent",
+        "message.started": "#/$defs/MessageStartedEvent"
+      },
+      "propertyName": "type"
+    },
+    "oneOf": [
+      {
+        "$ref": "#/$defs/MessageStartedEvent"
+      },
+      {
+        "$ref": "#/$defs/MessageDeltaEvent"
+      },
+      {
+        "$ref": "#/$defs/MessageCompletedEvent"
+      },
+      {
+        "$ref": "#/$defs/MessageErrorEvent"
+      }
+    ]
+  },
+  "title": "Catch-up chat SSE events"
+}

@@ -41,3 +41,13 @@ Configuration:
 Errors use `{ "error": { "code": "...", "message": "..." } }`. The demo
 does not persist repositories or conversations; any valid repository route is
 constructed from its owner and name and receives the same fixture content.
+
+## Contract artifacts and tests
+
+The tracked artifacts in `../contracts/` are generated from the backend:
+
+```bash
+uv run --project backend python backend/export_contracts.py
+uv run --project backend python backend/export_contracts.py --check
+uv run --project backend pytest
+```
