@@ -168,8 +168,8 @@ def citation_fixture(passage: SourcePassage, *, identifier: UUID) -> Citation:
     )
 
 
-def messages_fixture(repository_id: UUID) -> list[Message]:
-    conversation = conversation_fixture(repository_id)
+def messages_fixture(repository_id: UUID, conversation_id: UUID | None = None) -> list[Message]:
+    conversation = conversation_fixture(repository_id).model_copy(update={"id": conversation_id}) if conversation_id else conversation_fixture(repository_id)
     checkout, payment = passages_fixture(repository_id)
     return [
         Message(

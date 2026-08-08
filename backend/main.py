@@ -6,15 +6,13 @@ import asyncio
 import json
 import os
 import re
-import time
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
 from typing import Annotated, Any, Literal
 from urllib.parse import unquote, urlsplit
 from uuid import UUID, uuid4
 
 import uvicorn
-from fastapi import FastAPI, Query, Request
+from fastapi import Depends, FastAPI, Query, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,11 +21,13 @@ from pydantic import BaseModel, ConfigDict, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 try:
-    from .fixtures import DEMO_REPOSITORY_ID, DEMO_REVISION, FILE_CONTENT, STARTER_QUESTIONS, conversation_fixture, messages_fixture, passages_fixture, tree_fixture
-    from .models import Citation, Conversation, IndexingError, IndexingJob, Message, Repository, SourcePassage, utc_now
+    from .fixtures import DEMO_CONVERSATION_ID, DEMO_REPOSITORY_ID, DEMO_REVISION, FILE_CONTENT, STARTER_QUESTIONS, messages_fixture, passages_fixture, tree_fixture
+    from .models import Citation, Conversation, IndexingError, IndexingJob, Message, Repository, SourcePassage
+    from .stores import InMemoryStores, InvalidJobTransition
 except ImportError:  # Allows ``uv run main.py`` from the backend directory.
-    from fixtures import DEMO_REPOSITORY_ID, DEMO_REVISION, FILE_CONTENT, STARTER_QUESTIONS, conversation_fixture, messages_fixture, passages_fixture, tree_fixture
-    from models import Citation, Conversation, IndexingError, IndexingJob, Message, Repository, SourcePassage, utc_now
+    from fixtures import DEMO_CONVERSATION_ID, DEMO_REPOSITORY_ID, DEMO_REVISION, FILE_CONTENT, STARTER_QUESTIONS, messages_fixture, passages_fixture, tree_fixture
+    from models import Citation, Conversation, IndexingError, IndexingJob, Message, Repository, SourcePassage
+    from stores import InMemoryStores, InvalidJobTransition
 
 
 TreeNodeType = Literal["file", "folder"]
@@ -41,6 +41,7 @@ class TreeNode(BaseModel):
 
 class RepositoryCreateResponse(BaseModel):
     repository: Repository
+    conversation: Conversation
     job: IndexingJob
 
 
@@ -102,25 +103,22 @@ TreeNode.model_rebuild()
 
 class RepositoryRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
     url: str = ""
+
+
+class ConversationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    repository_id: UUID
 
 
 class ChatRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
-    repository_id: str = ""
+    repository_id: UUID | None = None
+    conversation_id: UUID | None = None
     question: str = ""
 
 
-@dataclass
-class JobState:
-    job: IndexingJob
-    created_at_monotonic: float
-
-
 app = FastAPI(title="Catch-up backend")
-
 configured_origins = [
     origin.strip()
     for origin in os.getenv("FRONTEND_ORIGINS", os.getenv("FRONTEND_ORIGIN", "http://localhost:3000")).split(",")
@@ -133,12 +131,39 @@ app.add_middleware(
     allow_headers=["Content-Type"],
 )
 
-
-JOBS: dict[str, JobState] = {}
-REPOSITORIES: dict[tuple[str, str], Repository] = {}
-JOB_DURATION_SECONDS = 1.2
 SEGMENT_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 OWNER_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]*$")
+
+
+def reset_in_memory_stores(target_app: FastAPI = app) -> None:
+    """Reset the process-local stores and seed the checkout fixture for demos/tests."""
+    stores = InMemoryStores()
+    repository = Repository(
+        id=DEMO_REPOSITORY_ID,
+        source_url="https://github.com/acme/checkout-service",
+        owner="acme",
+        name="checkout-service",
+        default_branch="main",
+        indexed_revision=DEMO_REVISION,
+    )
+    conversation = Conversation(id=DEMO_CONVERSATION_ID, repository_id=repository.id)
+    stores.repositories.add(repository)
+    stores.conversations.add(conversation)
+    stores.passages.add_many(passages_fixture(repository.id))
+    for message in messages_fixture(repository.id, conversation.id):
+        stores.messages.add(message)
+    stores.jobs.add(IndexingJob(repository_id=repository.id, status="queued", stage="queued", progress=0))
+    target_app.state.stores = stores
+
+
+reset_in_memory_stores()
+
+
+def get_stores(request: Request) -> InMemoryStores:
+    return request.app.state.stores
+
+
+StoresDependency = Annotated[InMemoryStores, Depends(get_stores)]
 
 
 def error_response(status_code: int, code: str, message: str, *, details: Any | None = None) -> JSONResponse:
@@ -163,21 +188,6 @@ async def http_exception(request: Request, exc: StarletteHTTPException) -> JSONR
     return error_response(exc.status_code, "http_error", str(exc.detail))
 
 
-def repository_identity(owner: str, name: str, *, url: str | None = None) -> Repository:
-    key = (owner, name)
-    if key not in REPOSITORIES:
-        repository_id = DEMO_REPOSITORY_ID if key == ("acme", "checkout-service") else uuid4()
-        REPOSITORIES[key] = Repository(
-            id=repository_id,
-            source_url=url or f"https://github.com/{owner}/{name}",
-            owner=owner,
-            name=name,
-            default_branch="main",
-            indexed_revision=DEMO_REVISION,
-        )
-    return REPOSITORIES[key]
-
-
 def validate_segment(value: str, *, owner: bool = False) -> str | None:
     decoded = unquote(value).strip()
     pattern = OWNER_PATTERN if owner else SEGMENT_PATTERN
@@ -197,67 +207,38 @@ def parse_repository_url(value: str) -> tuple[str, str] | None:
         return None
     if parsed.username or parsed.password or port or parsed.query or parsed.fragment:
         return None
-    raw_segments = parsed.path.split("/")
-    if not raw_segments or raw_segments[0] != "":
-        return None
-    raw_segments = raw_segments[1:]
+    raw_segments = parsed.path.split("/")[1:]
     if raw_segments and raw_segments[-1] == "":
         raw_segments.pop()
-    if any(not segment for segment in raw_segments):
+    if len(raw_segments) != 2 or any(not segment for segment in raw_segments):
         return None
     segments = [unquote(segment) for segment in raw_segments]
-    if len(segments) != 2:
-        return None
     owner = validate_segment(segments[0], owner=True)
     name = validate_segment(segments[1][:-4] if segments[1].endswith(".git") else segments[1])
-    if not owner or not name:
-        return None
-    return owner, name
+    return (owner, name) if owner and name else None
 
 
 def repository_from_route(owner_segment: str, repo_segment: str) -> tuple[str, str] | None:
     owner = validate_segment(owner_segment, owner=True)
-    repo_without_suffix = repo_segment[:-4] if repo_segment.endswith(".git") else repo_segment
-    name = validate_segment(repo_without_suffix)
-    if not owner or not name:
-        return None
-    return owner, name
+    name = validate_segment(repo_segment[:-4] if repo_segment.endswith(".git") else repo_segment)
+    return (owner, name) if owner and name else None
 
 
-def ensure_job(repository: Repository, *, reset: bool = False) -> JobState:
-    existing = next((state for state in JOBS.values() if state.job.repository_id == repository.id), None)
-    if reset or existing is None:
-        job = IndexingJob(repository_id=repository.id, status="queued", stage="queued", progress=0)
-        state = JobState(job=job, created_at_monotonic=time.monotonic())
-        JOBS[str(job.id)] = state
-        return state
-    return existing
-
-
-def job_payload(state: JobState) -> IndexingJob:
-    elapsed = max(0.0, time.monotonic() - state.created_at_monotonic)
-    progress = min(100, int((elapsed / JOB_DURATION_SECONDS) * 100))
-    if progress >= 100:
-        status = "completed"
-        stage = "completed"
-        progress = 100
-    elif progress == 0:
-        status = "queued"
-        stage = "queued"
+def register_repository(stores: InMemoryStores, *, owner: str, name: str, url: str) -> tuple[Repository, Conversation, IndexingJob]:
+    repository = stores.repositories.get_by_route(owner, name)
+    if repository is None:
+        repository = stores.repositories.add(
+            Repository(source_url=url, owner=owner, name=name, default_branch="main", indexed_revision=DEMO_REVISION)
+        )
+        conversation = stores.conversations.add(Conversation(repository_id=repository.id))
+        stores.passages.add_many(passages_fixture(repository.id))
+        for message in messages_fixture(repository.id, conversation.id):
+            stores.messages.add(message)
     else:
-        status = "indexing"
-        stage = "indexing"
-    now = utc_now()
-    return state.job.model_copy(
-        update={
-            "status": status,
-            "stage": stage,
-            "progress": progress,
-            "updated_at": now,
-            "started_at": state.job.created_at if progress else None,
-            "completed_at": now if status == "completed" else None,
-        }
-    )
+        conversation = stores.conversations.get_active(repository.id)
+        assert conversation is not None
+    job = stores.jobs.add(IndexingJob(repository_id=repository.id, status="queued", stage="queued", progress=0))
+    return repository, conversation, job
 
 
 def file_path_from_query(path: str) -> str | None:
@@ -273,52 +254,62 @@ def file_path_from_query(path: str) -> str | None:
 
 @app.get("/health")
 async def health() -> dict[str, Any]:
-    return {"status": "ok", "service": "catch-up-backend", "phase": 2}
+    return {"status": "ok", "service": "catch-up-backend", "phase": 3}
 
 
 @app.post("/api/repositories", status_code=202, response_model=RepositoryCreateResponse)
-async def create_repository(payload: RepositoryRequest | None = None) -> RepositoryCreateResponse | JSONResponse:
+async def create_repository(payload: RepositoryRequest | None = None, stores: StoresDependency = None) -> RepositoryCreateResponse | JSONResponse:
     payload = payload or RepositoryRequest()
     parsed = parse_repository_url(payload.url)
     if not parsed:
-        return error_response(
-            422,
-            "invalid_repository_url",
-            "Use a public GitHub repository URL in the form https://github.com/owner/repository.",
-        )
+        return error_response(422, "invalid_repository_url", "Use a public GitHub repository URL in the form https://github.com/owner/repository.")
     owner, name = parsed
-    repository = repository_identity(owner, name, url=payload.url.strip().rstrip("/"))
-    job = ensure_job(repository, reset=True)
-    return RepositoryCreateResponse(
-        repository=repository,
-        job=job_payload(job),
-    )
+    repository, conversation, job = register_repository(stores, owner=owner, name=name, url=payload.url.strip().rstrip("/"))
+    return RepositoryCreateResponse(repository=repository, conversation=conversation, job=stores.jobs.advance(job.id))
+
+
+@app.post("/api/conversations", status_code=201, response_model=Conversation)
+async def create_conversation(payload: ConversationRequest, stores: StoresDependency = None) -> Conversation | JSONResponse:
+    if stores.repositories.get(payload.repository_id) is None:
+        return error_response(404, "repository_not_found", "Repository was not found.")
+    return stores.conversations.add(Conversation(repository_id=payload.repository_id))
+
+
+@app.post("/api/repositories/{repository_id}/indexing-jobs", status_code=202, response_model=IndexingJob)
+async def create_indexing_job(repository_id: UUID, stores: StoresDependency = None) -> IndexingJob | JSONResponse:
+    if stores.repositories.get(repository_id) is None:
+        return error_response(404, "repository_not_found", "Repository was not found.")
+    job = stores.jobs.add(IndexingJob(repository_id=repository_id, status="queued", stage="queued", progress=0))
+    return stores.jobs.advance(job.id)
 
 
 @app.get("/api/repositories/{owner}/{repo}/workspace", response_model=WorkspaceResponse)
-async def get_workspace(owner: str, repo: str) -> WorkspaceResponse | JSONResponse:
+async def get_workspace(owner: str, repo: str, stores: StoresDependency = None) -> WorkspaceResponse | JSONResponse:
     parsed = repository_from_route(owner, repo)
-    if not parsed:
-        return error_response(404, "repository_not_found", "Repository route is invalid.")
-    owner_name, repo_name = parsed
-    repository = repository_identity(owner_name, repo_name)
-    job = ensure_job(repository)
+    repository = stores.repositories.get_by_route(*parsed) if parsed else None
+    if repository is None:
+        return error_response(404, "repository_not_found", "Repository was not found.")
+    conversation = stores.conversations.get_active(repository.id)
+    job = stores.jobs.current_for_repository(repository.id)
+    if conversation is None or job is None:
+        return error_response(409, "repository_not_ready", "Repository lifecycle records are incomplete.")
     return WorkspaceResponse(
         repository=repository,
-        conversation=conversation_fixture(repository.id),
+        conversation=conversation,
         tree=tree_fixture(),
         selected_file="src/api/checkout.ts",
         starter_questions=list(STARTER_QUESTIONS),
-        messages=messages_fixture(repository.id),
-        passages=passages_fixture(repository.id),
-        job=job_payload(job),
+        messages=stores.messages.list_for_conversation(conversation.id),
+        passages=stores.passages.list_for_repository(repository.id),
+        job=stores.jobs.advance(job.id),
     )
 
 
 @app.get("/api/repositories/{owner}/{repo}/files", response_model=FileResponse)
-async def get_file(owner: str, repo: str, path: str = Query(...)) -> FileResponse | JSONResponse:
-    if not repository_from_route(owner, repo):
-        return error_response(404, "repository_not_found", "Repository route is invalid.")
+async def get_file(owner: str, repo: str, path: str = Query(...), stores: StoresDependency = None) -> FileResponse | JSONResponse:
+    parsed = repository_from_route(owner, repo)
+    if parsed is None or stores.repositories.get_by_route(*parsed) is None:
+        return error_response(404, "repository_not_found", "Repository was not found.")
     safe_path = file_path_from_query(path)
     if not safe_path:
         return error_response(404, "file_not_found", "The requested source file was not found.")
@@ -326,33 +317,45 @@ async def get_file(owner: str, repo: str, path: str = Query(...)) -> FileRespons
 
 
 @app.get("/api/jobs/{job_id}", response_model=IndexingJob)
-async def get_job(job_id: str) -> IndexingJob | JSONResponse:
-    job = JOBS.get(job_id)
-    if not job:
+async def get_job(job_id: UUID, stores: StoresDependency = None) -> IndexingJob | JSONResponse:
+    job = stores.jobs.advance(job_id)
+    if job is None:
         return error_response(404, "job_not_found", "Indexing job was not found.")
-    return job_payload(job)
+    return job
 
 
-async def stream_demo_answer(repository_id: str, question: str) -> AsyncIterator[str]:
-    """Yield ordered SSE events; ``__stream_error__`` is a deterministic test hook."""
+@app.post("/api/jobs/{job_id}/cancel", response_model=IndexingJob)
+async def cancel_job(job_id: UUID, stores: StoresDependency = None) -> IndexingJob | JSONResponse:
+    try:
+        job = stores.jobs.cancel(job_id)
+    except InvalidJobTransition as error:
+        return error_response(409, "invalid_job_transition", str(error))
+    if job is None:
+        return error_response(404, "job_not_found", "Indexing job was not found.")
+    return job
+
+
+async def stream_demo_answer(stores: InMemoryStores, repository: Repository, conversation: Conversation, question: str) -> AsyncIterator[str]:
+    """Yield ordered SSE events and persist the demo exchange in the active conversation."""
     message_id = uuid4()
+    stores.messages.add(Message(conversation_id=conversation.id, role="user", content=question, completion_state="completed"))
     try:
         yield f"data: {json.dumps({'type': 'message.started', 'message_id': str(message_id)})}\n\n"
         await asyncio.sleep(0.04)
         if "__stream_error__" in question:
+            stores.messages.add(Message(id=message_id, conversation_id=conversation.id, role="assistant", content="", completion_state="failed"))
             raise RuntimeError("The demo stream failed before completion.")
+        answer = ""
         for text in (
             "The checkout flow starts in the API layer, validates the cart, and coordinates payment with inventory. ",
             "The controller creates the order only after both side effects succeed; a failed inventory reservation refunds the payment.",
         ):
+            answer += text
             yield f"data: {json.dumps({'type': 'message.delta', 'text': text})}\n\n"
             await asyncio.sleep(0.04)
-        try:
-            message_repository_id = UUID(repository_id)
-        except ValueError:
-            message_repository_id = DEMO_REPOSITORY_ID
-        citations = [citation.model_dump(mode="json") for citation in messages_fixture(message_repository_id)[-1].citations]
-        yield f"data: {json.dumps({'type': 'message.completed', 'citations': citations})}\n\n"
+        citations = messages_fixture(repository.id, conversation.id)[-1].citations
+        stores.messages.add(Message(id=message_id, conversation_id=conversation.id, role="assistant", content=answer, completion_state="completed", citations=citations))
+        yield f"data: {json.dumps({'type': 'message.completed', 'citations': [citation.model_dump(mode='json') for citation in citations]})}\n\n"
     except asyncio.CancelledError:
         raise
     except Exception as exc:
@@ -360,14 +363,22 @@ async def stream_demo_answer(repository_id: str, question: str) -> AsyncIterator
 
 
 @app.post("/api/chat/stream")
-async def chat_stream(payload: ChatRequest | None = None) -> Response:
+async def chat_stream(payload: ChatRequest | None = None, stores: StoresDependency = None) -> Response:
     payload = payload or ChatRequest()
-    if not payload.repository_id.strip():
+    if payload.repository_id is None:
         return error_response(422, "repository_required", "A repository id is required.")
     if not payload.question.strip():
         return error_response(422, "question_required", "A question is required.")
+    repository = stores.repositories.get(payload.repository_id)
+    if repository is None:
+        return error_response(404, "repository_not_found", "Repository was not found.")
+    conversation = stores.conversations.get(payload.conversation_id) if payload.conversation_id else stores.conversations.get_active(repository.id)
+    if conversation is None:
+        return error_response(404, "conversation_not_found", "Conversation was not found.")
+    if conversation.repository_id != repository.id:
+        return error_response(409, "conversation_repository_mismatch", "Conversation does not belong to this repository.")
     return StreamingResponse(
-        stream_demo_answer(payload.repository_id, payload.question.strip()),
+        stream_demo_answer(stores, repository, conversation, payload.question.strip()),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
     )

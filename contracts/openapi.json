@@ -4,15 +4,34 @@
       "ChatRequest": {
         "additionalProperties": false,
         "properties": {
+          "conversation_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversation Id"
+          },
           "question": {
             "default": "",
             "title": "Question",
             "type": "string"
           },
           "repository_id": {
-            "default": "",
-            "title": "Repository Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repository Id"
           }
         },
         "title": "ChatRequest",
@@ -98,6 +117,21 @@
           "updated_at"
         ],
         "title": "Conversation",
+        "type": "object"
+      },
+      "ConversationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "repository_id": {
+            "format": "uuid",
+            "title": "Repository Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "repository_id"
+        ],
+        "title": "ConversationRequest",
         "type": "object"
       },
       "FileResponse": {
@@ -403,6 +437,9 @@
       },
       "RepositoryCreateResponse": {
         "properties": {
+          "conversation": {
+            "$ref": "#/components/schemas/Conversation"
+          },
           "job": {
             "$ref": "#/components/schemas/IndexingJob"
           },
@@ -412,6 +449,7 @@
         },
         "required": [
           "repository",
+          "conversation",
           "job"
         ],
         "title": "RepositoryCreateResponse",
@@ -671,6 +709,44 @@
         "summary": "Chat Stream"
       }
     },
+    "/api/conversations": {
+      "post": {
+        "operationId": "create_conversation_api_conversations_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConversationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Conversation"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Conversation"
+      }
+    },
     "/api/jobs/{job_id}": {
       "get": {
         "operationId": "get_job_api_jobs__job_id__get",
@@ -680,6 +756,7 @@
             "name": "job_id",
             "required": true,
             "schema": {
+              "format": "uuid",
               "title": "Job Id",
               "type": "string"
             }
@@ -708,6 +785,46 @@
           }
         },
         "summary": "Get Job"
+      }
+    },
+    "/api/jobs/{job_id}/cancel": {
+      "post": {
+        "operationId": "cancel_job_api_jobs__job_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndexingJob"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Job"
       }
     },
     "/api/repositories": {
@@ -858,6 +975,46 @@
           }
         },
         "summary": "Get Workspace"
+      }
+    },
+    "/api/repositories/{repository_id}/indexing-jobs": {
+      "post": {
+        "operationId": "create_indexing_job_api_repositories__repository_id__indexing_jobs_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repository_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Repository Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndexingJob"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Indexing Job"
       }
     },
     "/health": {

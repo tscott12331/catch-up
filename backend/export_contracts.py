@@ -15,6 +15,7 @@ from main import (
     ChatSseEvent,
     Citation,
     Conversation,
+    ConversationRequest,
     ErrorDetail,
     ErrorResponse,
     FileResponse,
@@ -49,6 +50,7 @@ DOMAIN_MODELS = (
     ErrorResponse,
     RepositoryRequest,
     ChatRequest,
+    ConversationRequest,
 )
 
 

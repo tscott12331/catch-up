@@ -1,4 +1,4 @@
-import type { Citation, IndexingJob, RepositoryCreateResponse, WorkspacePayload } from "./types";
+import type { Citation, Conversation, IndexingJob, RepositoryCreateResponse, WorkspacePayload } from "./types";
 
 const DEFAULT_API_BASE_URL = "http://localhost:8000";
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || DEFAULT_API_BASE_URL).replace(/\/$/, "");
@@ -91,6 +91,23 @@ export function getWorkspace(owner: string, repo: string, signal?: AbortSignal):
   return requestJson(`/api/repositories/${encodeSegment(owner)}/${encodeSegment(repo)}/workspace`, { signal });
 }
 
+export function createConversation(repositoryId: string, signal?: AbortSignal): Promise<Conversation> {
+  return requestJson("/api/conversations", {
+    method: "POST",
+    signal,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ repository_id: repositoryId }),
+  });
+}
+
+export function createIndexingJob(repositoryId: string, signal?: AbortSignal): Promise<IndexingJob> {
+  return requestJson(`/api/repositories/${encodeSegment(repositoryId)}/indexing-jobs`, { method: "POST", signal });
+}
+
+export function cancelJob(jobId: string, signal?: AbortSignal): Promise<IndexingJob> {
+  return requestJson(`/api/jobs/${encodeSegment(jobId)}/cancel`, { method: "POST", signal });
+}
+
 export function getJob(jobId: string, signal?: AbortSignal): Promise<IndexingJob> {
   return requestJson(`/api/jobs/${encodeSegment(jobId)}`, { signal });
 }
@@ -119,14 +136,14 @@ function parseSseFrame(frame: string): ChatStreamEvent | null {
   }
 }
 
-export async function* streamChat(repositoryId: string, question: string, signal?: AbortSignal): AsyncGenerator<ChatStreamEvent> {
+export async function* streamChat(repositoryId: string, question: string, signal?: AbortSignal, conversationId?: string): AsyncGenerator<ChatStreamEvent> {
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}/api/chat/stream`, {
       method: "POST",
       signal,
       headers: { Accept: "text/event-stream", "Content-Type": "application/json" },
-      body: JSON.stringify({ repository_id: repositoryId, question }),
+      body: JSON.stringify({ repository_id: repositoryId, conversation_id: conversationId, question }),
     });
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") throw error;

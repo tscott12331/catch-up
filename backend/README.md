@@ -27,8 +27,11 @@ Configuration:
 ## Endpoints
 
 - `GET /health`
-- `POST /api/repositories` accepts a public GitHub URL and returns repository
-  identity plus an indexing job.
+- `POST /api/repositories` accepts a public GitHub URL and registers its
+  repository, initial active conversation, and indexing job.
+- `POST /api/conversations` makes a new active conversation for a registered repository.
+- `POST /api/repositories/{repository_id}/indexing-jobs` starts a new indexing job.
+- `POST /api/jobs/{job_id}/cancel` cancels a queued or indexing job.
 - `GET /api/repositories/{owner}/{repo}/workspace` returns the fixture tree,
   selected file, starter questions, initial messages, and current job.
 - `GET /api/repositories/{owner}/{repo}/files?path=...` returns source content
@@ -39,8 +42,10 @@ Configuration:
   `message.error` SSE events.
 
 Errors use `{ "error": { "code": "...", "message": "..." } }`. The demo
-does not persist repositories or conversations; any valid repository route is
-constructed from its owner and name and receives the same fixture content.
+uses process-local in-memory stores. They reset whenever the backend process
+restarts; tests can call `reset_in_memory_stores()` to reset them explicitly.
+Only registered repositories are available on workspace and file routes. The
+checkout fixture is seeded on each reset so the demo flow remains available.
 
 ## Contract artifacts and tests
 

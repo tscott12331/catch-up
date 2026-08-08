@@ -2,7 +2,7 @@
 
 import type { SubmitEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getFile, getJob, getWorkspace, streamChat } from "../_lib/api";
+import { createConversation, createIndexingJob, getFile, getJob, getWorkspace, streamChat } from "../_lib/api";
 import type { RepositoryRoute } from "../_lib/repository";
 import type { Citation, DisplayMessage, IndexingJob, TreeNode, WorkspacePayload } from "../_lib/types";
 import { ChatPanel } from "./chat-panel";
@@ -173,7 +173,22 @@ export function Workspace({ repository: routeRepository }: WorkspaceProps) {
     setWorkspaceLoading(true);
     setWorkspaceError("");
     setJobError("");
-    void loadWorkspace();
+    if (!workspace) {
+      void loadWorkspace();
+      return;
+    }
+    void createIndexingJob(workspace.repository.id)
+      .then((nextJob) => {
+        if (!mounted.current) return;
+        setJob(nextJob);
+        setWorkspace((current) => current ? { ...current, job: nextJob } : current);
+      })
+      .catch((error: unknown) => {
+        if (mounted.current) setJobError(error instanceof Error ? error.message : "Indexing could not be restarted.");
+      })
+      .finally(() => {
+        if (mounted.current) setWorkspaceLoading(false);
+      });
   }
 
   const runQuestion = useCallback(async (rawQuestion: string) => {
@@ -199,7 +214,7 @@ export function Workspace({ repository: routeRepository }: WorkspaceProps) {
     setIsThinking(true);
 
     try {
-      for await (const event of streamChat(workspace.repository.id, question, controller.signal)) {
+      for await (const event of streamChat(workspace.repository.id, question, controller.signal, workspace.conversation.id)) {
         if (event.type === "message.started") {
           assistantId = event.message_id;
           setMessages((current) => current.map((message) => message.id === localAssistantId ? { ...message, id: assistantId } : message));
@@ -230,11 +245,19 @@ export function Workspace({ repository: routeRepository }: WorkspaceProps) {
     void runQuestion(input);
   }
 
-  function resetChat() {
+  async function resetChat() {
+    if (!workspace) return;
     streamController.current?.abort();
     setIsThinking(false);
     setInput("");
-    setMessages(workspace?.messages[0] ? [{ ...workspace.messages[0] }] : []);
+    try {
+      const conversation = await createConversation(workspace.repository.id);
+      if (!mounted.current) return;
+      setWorkspace((current) => current ? { ...current, conversation, messages: [] } : current);
+      setMessages([]);
+    } catch (error) {
+      if (mounted.current) setJobError(error instanceof Error ? error.message : "A new conversation could not be created.");
+    }
   }
 
   if (workspaceLoading) {
@@ -255,7 +278,7 @@ export function Workspace({ repository: routeRepository }: WorkspaceProps) {
         <WorkspaceHeader repoName={workspace.repository.name} isIndexing={isIndexing} indexProgress={job.progress} jobStatus={job.status} />
         {jobError && <div className={styles.workspaceNotice} role="alert"><span>{jobError}</span><button onClick={retryWorkspace}>Retry</button></div>}
         <div className={styles.workspaceGrid}>
-          <ChatPanel messages={messages} suggestions={workspace.starter_questions} input={input} isThinking={isThinking} onInputChange={setInput} onSubmit={submitQuestion} onNewChat={resetChat} onSelectCitation={selectCitation} onRetry={(question) => void runQuestion(question)} />
+          <ChatPanel messages={messages} suggestions={workspace.starter_questions} input={input} isThinking={isThinking} onInputChange={setInput} onSubmit={submitQuestion} onNewChat={() => void resetChat()} onSelectCitation={selectCitation} onRetry={(question) => void runQuestion(question)} />
           <RepositoryExplorer repoName={workspace.repository.name} visibleTree={visibleTree} explorerFilter={explorerFilter} expanded={expanded} activeFile={activeFile} previewLines={previewLines} previewStatus={preview.status} previewMessage={preview.status === "unavailable" ? preview.message : ""} highlightedRange={citationHighlight} onFilterChange={setExplorerFilter} onToggleFolder={toggleFolder} onSelectFile={selectFile} />
         </div>
       </section>

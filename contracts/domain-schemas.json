@@ -4,15 +4,36 @@
     "ChatRequest": {
       "additionalProperties": false,
       "properties": {
+        "conversation_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Conversation Id"
+        },
         "question": {
           "default": "",
           "title": "Question",
           "type": "string"
         },
         "repository_id": {
-          "default": "",
-          "title": "Repository Id",
-          "type": "string"
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Repository Id"
         }
       },
       "title": "ChatRequest",
@@ -94,6 +115,21 @@
         "repository_id"
       ],
       "title": "Conversation",
+      "type": "object"
+    },
+    "ConversationRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "repository_id": {
+          "format": "uuid",
+          "title": "Repository Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repository_id"
+      ],
+      "title": "ConversationRequest",
       "type": "object"
     },
     "ErrorDetail": {
@@ -537,6 +573,38 @@
     },
     "RepositoryCreateResponse": {
       "$defs": {
+        "Conversation": {
+          "additionalProperties": false,
+          "properties": {
+            "created_at": {
+              "format": "date-time",
+              "title": "Created At",
+              "type": "string"
+            },
+            "id": {
+              "description": "A UUID version 4 identifier.",
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            },
+            "repository_id": {
+              "description": "A UUID version 4 identifier.",
+              "format": "uuid",
+              "title": "Repository Id",
+              "type": "string"
+            },
+            "updated_at": {
+              "format": "date-time",
+              "title": "Updated At",
+              "type": "string"
+            }
+          },
+          "required": [
+            "repository_id"
+          ],
+          "title": "Conversation",
+          "type": "object"
+        },
         "IndexingError": {
           "additionalProperties": false,
           "properties": {
@@ -728,6 +796,9 @@
         }
       },
       "properties": {
+        "conversation": {
+          "$ref": "#/$defs/Conversation"
+        },
         "job": {
           "$ref": "#/$defs/IndexingJob"
         },
@@ -737,6 +808,7 @@
       },
       "required": [
         "repository",
+        "conversation",
         "job"
       ],
       "title": "RepositoryCreateResponse",

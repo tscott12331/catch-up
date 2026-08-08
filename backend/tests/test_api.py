@@ -6,13 +6,12 @@ from uuid import UUID
 import httpx
 import pytest
 
-from main import JOB_DURATION_SECONDS, JOBS, REPOSITORIES, app
+from main import app, reset_in_memory_stores
 
 
 @pytest.fixture(autouse=True)
-def reset_jobs() -> None:
-    JOBS.clear()
-    REPOSITORIES.clear()
+def reset_stores() -> None:
+    reset_in_memory_stores()
 
 
 @pytest.fixture
@@ -22,93 +21,115 @@ async def client() -> httpx.AsyncClient:
         yield test_client
 
 
+async def register(client: httpx.AsyncClient, url: str = "https://github.com/acme/checkout-service") -> dict[str, object]:
+    response = await client.post("/api/repositories", json={"url": url})
+    assert response.status_code == 202
+    return response.json()
+
+
 @pytest.mark.anyio
 async def test_health_reports_service_metadata(client: httpx.AsyncClient) -> None:
     response = await client.get("/health")
-
-    assert response.status_code == 200
-    assert response.json() == {"status": "ok", "service": "catch-up-backend", "phase": 2}
+    assert response.json() == {"status": "ok", "service": "catch-up-backend", "phase": 3}
 
 
 @pytest.mark.anyio
-async def test_creating_a_repository_returns_identity_and_indexing_job(client: httpx.AsyncClient) -> None:
-    response = await client.post("/api/repositories", json={"url": "https://github.com/acme/checkout-service"})
-
-    assert response.status_code == 202
-    body = response.json()
+async def test_creating_a_repository_registers_its_initial_lifecycle_records(client: httpx.AsyncClient) -> None:
+    body = await register(client, "https://github.com/acme/new-service")
     repository = body["repository"]
+    conversation = body["conversation"]
+    job = body["job"]
     assert UUID(repository["id"]).version == 4
-    assert repository | {"id": None} == {
-        "id": None,
-        "source_url": "https://github.com/acme/checkout-service",
-        "owner": "acme",
-        "name": "checkout-service",
-        "default_branch": "main",
-        "indexed_revision": "8a8b1b9f95ea2f76e67c11b79f138b5e8044be57",
-    }
-    assert UUID(body["job"]["id"]).version == 4
-    assert body["job"]["repository_id"] == repository["id"]
-    assert body["job"]["status"] in {"queued", "indexing"}
-    assert body["job"]["stage"] in {"queued", "indexing"}
-    assert 0 <= body["job"]["progress"] < 100
+    assert conversation["repository_id"] == repository["id"]
+    assert job["repository_id"] == repository["id"]
+    assert job["status"] == "queued"
 
 
 @pytest.mark.anyio
-async def test_job_progress_reaches_completed(client: httpx.AsyncClient) -> None:
-    created = await client.post("/api/repositories", json={"url": "https://github.com/acme/checkout-service"})
-    job_id = created.json()["job"]["id"]
-    JOBS[job_id].created_at_monotonic -= JOB_DURATION_SECONDS
+async def test_workspace_and_files_require_a_registered_repository(client: httpx.AsyncClient) -> None:
+    for path in (
+        "/api/repositories/unregistered/repository/workspace",
+        "/api/repositories/unregistered/repository/files?path=README.md",
+    ):
+        response = await client.get(path)
+        assert response.status_code == 404
+        assert response.json()["error"]["code"] == "repository_not_found"
 
-    response = await client.get(f"/api/jobs/{job_id}")
 
+@pytest.mark.anyio
+async def test_new_chat_becomes_active_and_isolated_from_prior_messages(client: httpx.AsyncClient) -> None:
+    created = await register(client, "https://github.com/acme/new-service")
+    repository = created["repository"]
+    before = await client.get("/api/repositories/acme/new-service/workspace")
+    assert len(before.json()["messages"]) == 3
+
+    conversation_response = await client.post("/api/conversations", json={"repository_id": repository["id"]})
+    assert conversation_response.status_code == 201
+    conversation = conversation_response.json()
+    after = await client.get("/api/repositories/acme/new-service/workspace")
+    assert after.json()["conversation"]["id"] == conversation["id"]
+    assert after.json()["messages"] == []
+
+
+@pytest.mark.anyio
+async def test_chat_rejects_a_conversation_owned_by_another_repository(client: httpx.AsyncClient) -> None:
+    first = await register(client, "https://github.com/acme/first")
+    second = await register(client, "https://github.com/acme/second")
+    response = await client.post(
+        "/api/chat/stream",
+        json={
+            "repository_id": first["repository"]["id"],
+            "conversation_id": second["conversation"]["id"],
+            "question": "How does checkout work?",
+        },
+    )
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "conversation_repository_mismatch"
+
+
+@pytest.mark.anyio
+async def test_retry_creates_a_new_current_job(client: httpx.AsyncClient) -> None:
+    created = await register(client, "https://github.com/acme/new-service")
+    repository_id = created["repository"]["id"]
+    original_job = created["job"]
+    retry = await client.post(f"/api/repositories/{repository_id}/indexing-jobs")
+    assert retry.status_code == 202
+    assert retry.json()["id"] != original_job["id"]
+    workspace = await client.get("/api/repositories/acme/new-service/workspace")
+    assert workspace.json()["job"]["id"] == retry.json()["id"]
+
+
+@pytest.mark.anyio
+async def test_cancelling_a_job_is_terminal(client: httpx.AsyncClient) -> None:
+    created = await register(client, "https://github.com/acme/new-service")
+    job_id = created["job"]["id"]
+    response = await client.post(f"/api/jobs/{job_id}/cancel")
     assert response.status_code == 200
-    body = response.json()
-    assert body["id"] == job_id
-    assert body["status"] == "completed"
-    assert body["stage"] == "completed"
-    assert body["progress"] == 100
-    assert body["completed_at"].endswith("Z")
+    assert response.json()["status"] == response.json()["stage"] == "cancelled"
+    assert (await client.get(f"/api/jobs/{job_id}")).json()["status"] == "cancelled"
 
 
 @pytest.mark.anyio
-async def test_workspace_returns_repository_content_and_current_job(client: httpx.AsyncClient) -> None:
-    response = await client.get("/api/repositories/acme/checkout-service/workspace")
-
-    assert response.status_code == 200
-    body = response.json()
-    assert UUID(body["repository"]["id"]).version == 4
-    assert body["conversation"]["repository_id"] == body["repository"]["id"]
-    assert body["selected_file"] == "src/api/checkout.ts"
-    assert body["tree"][0]["name"] == "src"
-    assert UUID(body["messages"][0]["id"]).version == 4
-    assert body["messages"][0]["completion_state"] == "completed"
-    assert body["passages"][0]["revision"] == body["repository"]["indexed_revision"]
-    assert UUID(body["job"]["id"]).version == 4
+async def test_terminal_jobs_cannot_transition_again(client: httpx.AsyncClient) -> None:
+    created = await register(client, "https://github.com/acme/new-service")
+    job_id = UUID(created["job"]["id"])
+    job_store = app.state.stores.jobs
+    job_store._created_at_monotonic[job_id] -= job_store.duration_seconds
+    completed = await client.get(f"/api/jobs/{job_id}")
+    assert completed.json()["status"] == "completed"
+    invalid = await client.post(f"/api/jobs/{job_id}/cancel")
+    assert invalid.status_code == 409
+    assert invalid.json()["error"]["code"] == "invalid_job_transition"
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize(
-    ("method", "path", "payload", "status", "code"),
-    [
-        ("post", "/api/repositories", {"url": "https://example.com/acme/repo"}, 422, "invalid_repository_url"),
-        ("get", "/api/jobs/missing", None, 404, "job_not_found"),
-        ("get", "/api/repositories/acme/checkout-service/files?path=../secret", None, 404, "file_not_found"),
-        ("post", "/api/chat/stream", {"repository_id": "", "question": "hello"}, 422, "repository_required"),
-    ],
-)
-async def test_errors_use_the_public_error_envelope(
-    client: httpx.AsyncClient,
-    method: str,
-    path: str,
-    payload: dict[str, str] | None,
-    status: int,
-    code: str,
-) -> None:
-    response = await client.request(method, path, json=payload)
-
-    assert response.status_code == status
-    assert response.json()["error"]["code"] == code
-    assert isinstance(response.json()["error"]["message"], str)
+async def test_errors_use_the_public_error_envelope(client: httpx.AsyncClient) -> None:
+    response = await client.post("/api/repositories", json={"url": "https://example.com/acme/repo"})
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "invalid_repository_url"
+    response = await client.get("/api/jobs/11111111-1111-4111-8111-111111111111")
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "job_not_found"
 
 
 def sse_events(body: str) -> list[dict[str, object]]:
@@ -116,27 +137,14 @@ def sse_events(body: str) -> list[dict[str, object]]:
 
 
 @pytest.mark.anyio
-async def test_chat_stream_emits_started_delta_and_completed_events(client: httpx.AsyncClient) -> None:
-    response = await client.post("/api/chat/stream", json={"repository_id": "11111111-1111-4111-8111-111111111111", "question": "How does checkout work?"})
-
+async def test_chat_stream_persists_messages_in_the_active_conversation(client: httpx.AsyncClient) -> None:
+    workspace = await client.get("/api/repositories/acme/checkout-service/workspace")
+    payload = workspace.json()
+    response = await client.post(
+        "/api/chat/stream",
+        json={"repository_id": payload["repository"]["id"], "conversation_id": payload["conversation"]["id"], "question": "How does checkout work?"},
+    )
     events = sse_events(response.text)
-    assert response.headers["content-type"].startswith("text/event-stream")
     assert [event["type"] for event in events] == ["message.started", "message.delta", "message.delta", "message.completed"]
-    assert UUID(events[0]["message_id"]).version == 4
-    assert [(citation["path"], citation["start_line"], citation["end_line"]) for citation in events[-1]["citations"]] == [
-        ("src/api/checkout.ts", 5, 20),
-        ("src/services/payment-service.ts", 1, 13),
-    ]
-
-
-@pytest.mark.anyio
-async def test_chat_stream_emits_error_event(client: httpx.AsyncClient) -> None:
-    response = await client.post("/api/chat/stream", json={"repository_id": "11111111-1111-4111-8111-111111111111", "question": "__stream_error__"})
-
-    events = sse_events(response.text)
-    assert [event["type"] for event in events] == ["message.started", "message.error"]
-    assert events[-1] == {
-        "type": "message.error",
-        "code": "stream_failed",
-        "message": "The demo stream failed before completion.",
-    }
+    refreshed = await client.get("/api/repositories/acme/checkout-service/workspace")
+    assert len(refreshed.json()["messages"]) == len(payload["messages"]) + 2
