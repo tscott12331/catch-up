@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import time
+import logging
 from collections.abc import Iterable
 from typing import Protocol
 from uuid import UUID
 
 from models import Conversation, IndexingJob, Message, Repository, SourcePassage, utc_now
+
+
+logger = logging.getLogger(__name__)
 
 
 class RepositoryStore(Protocol):
@@ -195,13 +199,21 @@ class InMemoryJobStore:
             }
         )
         self._items[job.id] = updated
+        logger.info(
+            "Indexing job transitioned",
+            extra={
+                "event": "indexing_job_transition",
+                "job_id": str(updated.id),
+                "repository_id": str(updated.repository_id),
+            },
+        )
         return updated
 
 
 class InMemoryStores:
-    def __init__(self) -> None:
+    def __init__(self, *, job_duration_seconds: float = 1.2) -> None:
         self.repositories: RepositoryStore = InMemoryRepositoryStore()
         self.conversations: ConversationStore = InMemoryConversationStore()
         self.messages: MessageStore = InMemoryMessageStore()
         self.passages: PassageStore = InMemoryPassageStore()
-        self.jobs: JobStore = InMemoryJobStore()
+        self.jobs: JobStore = InMemoryJobStore(duration_seconds=job_duration_seconds)

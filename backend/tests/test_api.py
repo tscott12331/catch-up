@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import json
+import logging
 from uuid import UUID
 
 import httpx
 import pytest
 
 import main
+import stores as stores_module
 from main import app, reset_in_memory_stores, stream_demo_answer
+from observability import JsonFormatter
 
 
 @pytest.fixture(autouse=True)
@@ -32,7 +36,93 @@ async def register(client: httpx.AsyncClient, url: str = "https://github.com/acm
 @pytest.mark.anyio
 async def test_health_reports_service_metadata(client: httpx.AsyncClient) -> None:
     response = await client.get("/health")
-    assert response.json() == {"status": "ok", "service": "catch-up-backend", "phase": 4}
+    assert response.json() == {"status": "ok", "service": "catch-up-backend"}
+
+
+@pytest.mark.anyio
+async def test_readiness_is_independent_of_delivery_phase_and_reports_store_initialization(client: httpx.AsyncClient) -> None:
+    assert (await client.get("/ready")).json() == {"status": "ready", "service": "catch-up-backend"}
+    app.state.stores = None
+    response = await client.get("/ready")
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "not_ready"
+    reset_in_memory_stores()
+
+
+@pytest.mark.anyio
+async def test_request_logs_are_json_correlated_and_do_not_include_source_or_questions(client: httpx.AsyncClient) -> None:
+    output = io.StringIO()
+    handler = logging.StreamHandler(output)
+    handler.setFormatter(JsonFormatter())
+    main.logger.addHandler(handler)
+    main.logger.setLevel(logging.INFO)
+    try:
+        response = await client.get(
+            "/api/repositories/acme/checkout-service/files?path=src/api/checkout.ts",
+            headers={"X-Request-ID": "correlation-123"},
+        )
+        assert response.headers["X-Request-ID"] == "correlation-123"
+        records = [json.loads(line) for line in output.getvalue().splitlines()]
+        request_record = next(record for record in records if record["event"] == "request_completed")
+        assert request_record["request_id"] == "correlation-123"
+        assert request_record["method"] == "GET"
+        assert request_record["route"] == "/api/repositories/{owner}/{repo}/files"
+        assert request_record["status_code"] == 200
+        assert isinstance(request_record["duration_ms"], float)
+        assert request_record["repository_id"]
+        encoded = output.getvalue()
+        assert "export async function" not in encoded
+        assert "checkout.ts" not in encoded
+    finally:
+        main.logger.removeHandler(handler)
+
+
+@pytest.mark.anyio
+async def test_invalid_request_id_is_replaced_and_stream_logs_do_not_include_question(client: httpx.AsyncClient) -> None:
+    output = io.StringIO()
+    handler = logging.StreamHandler(output)
+    handler.setFormatter(JsonFormatter())
+    main.logger.addHandler(handler)
+    main.logger.setLevel(logging.INFO)
+    try:
+        workspace = (await client.get("/api/repositories/acme/checkout-service/workspace")).json()
+        secret_question = "private question that must never reach logs"
+        response = await client.post(
+            "/api/chat/stream",
+            json={"repository_id": workspace["repository"]["id"], "conversation_id": workspace["conversation"]["id"], "question": secret_question},
+            headers={"X-Request-ID": "bad request id with spaces"},
+        )
+        assert response.headers["X-Request-ID"] != "bad request id with spaces"
+        assert UUID(response.headers["X-Request-ID"]).version == 4
+        records = [json.loads(line) for line in output.getvalue().splitlines()]
+        terminal = next(record for record in records if record["event"] == "chat_stream_completed")
+        assert terminal["repository_id"] == workspace["repository"]["id"]
+        assert terminal["conversation_id"] == workspace["conversation"]["id"]
+        assert "private question" not in output.getvalue()
+    finally:
+        main.logger.removeHandler(handler)
+
+
+@pytest.mark.anyio
+async def test_job_transition_log_inherits_the_request_correlation_id(client: httpx.AsyncClient) -> None:
+    output = io.StringIO()
+    handler = logging.StreamHandler(output)
+    handler.setFormatter(JsonFormatter())
+    stores_module.logger.addHandler(handler)
+    stores_module.logger.setLevel(logging.INFO)
+    try:
+        created = await register(client, "https://github.com/acme/logged-service")
+        job_id = UUID(created["job"]["id"])
+        app.state.stores.jobs._created_at_monotonic[job_id] -= app.state.stores.jobs.duration_seconds
+        response = await client.get(f"/api/jobs/{job_id}", headers={"X-Request-ID": "job-log-123"})
+        assert response.status_code == 200
+        records = [json.loads(line) for line in output.getvalue().splitlines()]
+        transition = next(record for record in records if record["event"] == "indexing_job_transition")
+        assert transition["request_id"] == "job-log-123"
+        assert transition["job_id"] == str(job_id)
+        assert transition["repository_id"] == created["repository"]["id"]
+    finally:
+        stores_module.logger.removeHandler(handler)
 
 
 @pytest.mark.anyio

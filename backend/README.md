@@ -2,10 +2,10 @@
 
 The demo backend uses FastAPI and serves repository metadata, the fixture
 workspace, source previews, deterministic indexing progress, and streamed
-answers. Start it from this directory with:
+answers. From the repository root, start it with:
 
 ```bash
-uv run main.py
+uv run --project backend python backend/run.py
 ```
 
 The Next.js app runs separately in `frontend/`:
@@ -19,14 +19,17 @@ bun run dev
 Configuration:
 
 - `HOST` and `PORT` configure the FastAPI bind address (`127.0.0.1:8000` by default).
-- `FRONTEND_ORIGIN` configures one allowed browser origin; use
-  `FRONTEND_ORIGINS` with comma-separated origins for more than one.
+- `FRONTEND_ORIGINS` configures allowed browser origins (the legacy singular
+  `FRONTEND_ORIGIN` remains supported).
+- `ENVIRONMENT`, `LOG_LEVEL`, and `DEMO_JOB_DURATION_SECONDS` are validated at
+  startup; see `backend/.env.example` and the root README.
 - `NEXT_PUBLIC_API_BASE_URL` belongs to the frontend and points at this API,
   defaulting to `http://localhost:8000`.
 
 ## Endpoints
 
 - `GET /health`
+- `GET /ready`
 - `POST /api/repositories` accepts a public GitHub URL and registers its
   repository, initial active conversation, and indexing job.
 - `POST /api/conversations` makes a new active conversation for a registered repository.

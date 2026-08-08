@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
+import logging
 from pathlib import Path
 from typing import Any
 
 from pydantic import TypeAdapter
+
+from observability import configure_json_logging
 
 from main import (
     ChatRequest,
@@ -25,6 +27,7 @@ from main import (
     Repository,
     RepositoryRequest,
     SourcePassage,
+    StatusResponse,
     TreeNode,
     WorkspaceResponse,
     app,
@@ -34,6 +37,7 @@ from models import ChatSseEvent, MessageCompletedEvent, MessageDeltaEvent, Messa
 
 CONTRACTS_DIR = Path(__file__).resolve().parent.parent / "contracts"
 FRONTEND_GENERATED_DIR = Path(__file__).resolve().parent.parent / "frontend" / "app" / "_lib" / "generated"
+logger = logging.getLogger(__name__)
 
 DOMAIN_MODELS = (
     Repository,
@@ -49,6 +53,7 @@ DOMAIN_MODELS = (
     FileResponse,
     ErrorDetail,
     ErrorResponse,
+    StatusResponse,
     RepositoryRequest,
     ChatRequest,
     ConversationRequest,
@@ -87,14 +92,14 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="fail if tracked contracts are stale")
     args = parser.parse_args()
+    configure_json_logging("ERROR")
     rendered = render_contracts()
     stale = [path for path, content in rendered.items() if not path.is_file() or path.read_text(encoding="utf-8") != content]
 
     if args.check:
         if stale:
-            print("Contract artifacts are stale:", file=sys.stderr)
             for path in stale:
-                print(f"  {path.relative_to(CONTRACTS_DIR.parent)}", file=sys.stderr)
+                logger.error("Contract artifact is stale: %s", path.relative_to(CONTRACTS_DIR.parent), extra={"event": "contract_stale"})
             return 1
         return 0
 

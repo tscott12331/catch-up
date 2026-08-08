@@ -1095,6 +1095,24 @@
       "title": "SourcePassage",
       "type": "object"
     },
+    "StatusResponse": {
+      "properties": {
+        "service": {
+          "title": "Service",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "service"
+      ],
+      "title": "StatusResponse",
+      "type": "object"
+    },
     "TreeNode": {
       "$defs": {
         "TreeNode": {

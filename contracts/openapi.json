@@ -515,6 +515,24 @@
         "title": "SourcePassage",
         "type": "object"
       },
+      "StatusResponse": {
+        "properties": {
+          "service": {
+            "title": "Service",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "service"
+        ],
+        "title": "StatusResponse",
+        "type": "object"
+      },
       "TreeNode": {
         "properties": {
           "children": {
@@ -1008,9 +1026,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Health Health Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/StatusResponse"
                 }
               }
             },
@@ -1018,6 +1034,25 @@
           }
         },
         "summary": "Health"
+      }
+    },
+    "/ready": {
+      "get": {
+        "description": "Report whether this process can serve requests without assuming a delivery phase.",
+        "operationId": "ready_ready_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Ready"
       }
     }
   }

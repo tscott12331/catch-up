@@ -1,12 +1,18 @@
 # Catch-up frontend
 
 This Next.js app is the presentation layer for the FastAPI demo backend.
-Run the two processes in separate terminals:
+Run both processes together from the repository root:
+
+```bash
+python dev.py
+```
+
+Or run the two processes in separate terminals:
 
 ```bash
 # terminal 1
-cd ../backend
-uv run main.py
+cd ..
+uv run --project backend python backend/run.py
 
 # terminal 2
 cd frontend
