@@ -10,29 +10,15 @@ from typing import Any
 
 from pydantic import TypeAdapter
 
-from observability import configure_json_logging
+from main import app
 
-from main import (
-    ChatRequest,
-    Citation,
-    Conversation,
-    ConversationRequest,
-    ErrorDetail,
-    ErrorResponse,
-    FileResponse,
-    IndexingError,
-    IndexingJob,
-    Message,
-    RepositoryCreateResponse,
-    Repository,
-    RepositoryRequest,
-    SourcePassage,
-    StatusResponse,
-    TreeNode,
-    WorkspaceResponse,
-    app,
-)
-from models import ChatSseEvent, MessageCompletedEvent, MessageDeltaEvent, MessageErrorEvent, MessageStartedEvent
+from models.api.chat_sse import ChatSseEvent, Citation, Message, MessageCompletedEvent, MessageDeltaEvent, MessageErrorEvent, MessageStartedEvent
+from models.api.request import ChatRequest, ConversationRequest, RepositoryRequest
+from models.api.response import ErrorDetail, ErrorResponse, FileResponse, RepositoryCreateResponse, StatusResponse, WorkspaceResponse
+from models.chat import Conversation
+from models.jobs import IndexingJob
+from models.repository import IndexingError, Repository, SourcePassage, TreeNode
+from observability import configure_json_logging
 
 
 CONTRACTS_DIR = Path(__file__).resolve().parent.parent / "contracts"

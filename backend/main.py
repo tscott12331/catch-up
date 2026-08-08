@@ -16,90 +16,45 @@ from fastapi import Depends, FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
-from pydantic import BaseModel, ConfigDict, TypeAdapter
+from pydantic import AnyHttpUrl, BaseModel, ConfigDict, TypeAdapter
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
+## HERE
 
 try:
     from .fixtures import DEMO_CONVERSATION_ID, DEMO_REPOSITORY_ID, DEMO_REVISION, FILE_CONTENT, STARTER_QUESTIONS, messages_fixture, passages_fixture, tree_fixture
-    from .models import ChatSseEvent, Citation, Conversation, IndexingError, IndexingJob, Message, MessageCompletedEvent, MessageDeltaEvent, MessageErrorEvent, MessageStartedEvent, Repository, SourcePassage, utc_now
     from .stores import InMemoryStores, InvalidJobTransition
     from .observability import configure_json_logging, request_id_context
     from .settings import Settings, load_settings
+
+    # import models
+    from .models.api.chat_sse import ChatSseEvent, Citation, Message, MessageCompletedEvent, MessageDeltaEvent, MessageErrorEvent, MessageStartedEvent
+    from .models.api.request import ChatRequest, ConversationRequest, RepositoryRequest
+    from .models.api.response import FileResponse, RepositoryCreateResponse, StatusResponse, WorkspaceResponse
+    from .models.chat import Conversation
+    from .models.jobs import IndexingJob
+    from .models.models import utc_now
+    from .models.repository import Repository
 except ImportError:  # Allows ``uv run main.py`` from the backend directory.
     from fixtures import DEMO_CONVERSATION_ID, DEMO_REPOSITORY_ID, DEMO_REVISION, FILE_CONTENT, STARTER_QUESTIONS, messages_fixture, passages_fixture, tree_fixture
-    from models import ChatSseEvent, Citation, Conversation, IndexingError, IndexingJob, Message, MessageCompletedEvent, MessageDeltaEvent, MessageErrorEvent, MessageStartedEvent, Repository, SourcePassage, utc_now
     from stores import InMemoryStores, InvalidJobTransition
     from observability import configure_json_logging, request_id_context
     from settings import Settings, load_settings
 
+    # import models
+    from models.api.chat_sse import ChatSseEvent, Citation, Message, MessageCompletedEvent, MessageDeltaEvent, MessageErrorEvent, MessageStartedEvent
+    from models.api.request import ChatRequest, ConversationRequest, RepositoryRequest
+    from models.api.response import FileResponse, RepositoryCreateResponse, StatusResponse, WorkspaceResponse
+    from models.chat import Conversation
+    from models.jobs import IndexingJob
+    from models.models import utc_now
+    from models.repository import Repository
 
-TreeNodeType = Literal["file", "folder"]
+
 logger = logging.getLogger(__name__)
 REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
-
-class TreeNode(BaseModel):
-    name: str
-    type: TreeNodeType
-    children: list["TreeNode"] | None = None
-
-
-class RepositoryCreateResponse(BaseModel):
-    repository: Repository
-    conversation: Conversation
-    job: IndexingJob
-
-
-class WorkspaceResponse(BaseModel):
-    repository: Repository
-    conversation: Conversation
-    tree: list[TreeNode]
-    selected_file: str
-    starter_questions: list[str]
-    messages: list[Message]
-    passages: list[SourcePassage]
-    job: IndexingJob
-
-
-class FileResponse(BaseModel):
-    path: str
-    content: str
-
-
-class ErrorDetail(BaseModel):
-    code: str
-    message: str
-    details: Any | None = None
-
-
-class ErrorResponse(BaseModel):
-    error: ErrorDetail
-
-
-class StatusResponse(BaseModel):
-    status: str
-    service: str
-
-
-TreeNode.model_rebuild()
 chat_sse_event_adapter = TypeAdapter(ChatSseEvent)
-
-
-class RepositoryRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    url: str = ""
-
-
-class ConversationRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    repository_id: UUID
-
-
-class ChatRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    repository_id: UUID
-    conversation_id: UUID
-    question: str = ""
 
 
 settings: Settings = load_settings()
@@ -121,7 +76,7 @@ def reset_in_memory_stores(target_app: FastAPI = app, *, job_duration_seconds: f
     stores = InMemoryStores(job_duration_seconds=job_duration_seconds or settings.demo_job_duration_seconds)
     repository = Repository(
         id=DEMO_REPOSITORY_ID,
-        source_url="https://github.com/acme/checkout-service",
+        source_url=AnyHttpUrl("https://github.com/acme/checkout-service"),
         owner="acme",
         name="checkout-service",
         default_branch="main",
@@ -271,7 +226,7 @@ def repository_from_route(owner_segment: str, repo_segment: str) -> tuple[str, s
     return (owner, name) if owner and name else None
 
 
-def register_repository(stores: InMemoryStores, *, owner: str, name: str, url: str) -> tuple[Repository, Conversation, IndexingJob]:
+def register_repository(stores: InMemoryStores, *, owner: str, name: str, url: AnyHttpUrl) -> tuple[Repository, Conversation, IndexingJob]:
     repository = stores.repositories.get_by_route(owner, name)
     if repository is None:
         repository = stores.repositories.add(
@@ -323,19 +278,21 @@ async def reset_test_stores(request: Request) -> Response | JSONResponse:
 
 
 @app.post("/api/repositories", status_code=202, response_model=RepositoryCreateResponse)
-async def create_repository(request: Request, payload: RepositoryRequest | None = None, stores: StoresDependency = None) -> RepositoryCreateResponse | JSONResponse:
+async def create_repository(request: Request, payload: RepositoryRequest, stores: StoresDependency) -> RepositoryCreateResponse | JSONResponse:
     payload = payload or RepositoryRequest()
     parsed = parse_repository_url(payload.url)
     if not parsed:
         return error_response(422, "invalid_repository_url", "Use a public GitHub repository URL in the form https://github.com/owner/repository.")
     owner, name = parsed
-    repository, conversation, job = register_repository(stores, owner=owner, name=name, url=payload.url.strip().rstrip("/"))
+    repository, conversation, job = register_repository(stores, owner=owner, name=name, url=AnyHttpUrl(payload.url.strip().rstrip("/")))
     add_request_identifiers(request, repository_id=repository.id, conversation_id=conversation.id, job_id=job.id)
-    return RepositoryCreateResponse(repository=repository, conversation=conversation, job=stores.jobs.advance(job.id))
+    job = stores.jobs.advance(job.id)
+    assert job is not None, "Job exists"
+    return RepositoryCreateResponse(repository=repository, conversation=conversation, job=job)
 
 
 @app.post("/api/conversations", status_code=201, response_model=Conversation)
-async def create_conversation(request: Request, payload: ConversationRequest, stores: StoresDependency = None) -> Conversation | JSONResponse:
+async def create_conversation(request: Request, payload: ConversationRequest, stores: StoresDependency) -> Conversation | JSONResponse:
     if stores.repositories.get(payload.repository_id) is None:
         return error_response(404, "repository_not_found", "Repository was not found.")
     conversation = stores.conversations.add(Conversation(repository_id=payload.repository_id))
@@ -344,16 +301,19 @@ async def create_conversation(request: Request, payload: ConversationRequest, st
 
 
 @app.post("/api/repositories/{repository_id}/indexing-jobs", status_code=202, response_model=IndexingJob)
-async def create_indexing_job(request: Request, repository_id: UUID, stores: StoresDependency = None) -> IndexingJob | JSONResponse:
+async def create_indexing_job(request: Request, repository_id: UUID, stores: StoresDependency) -> IndexingJob | JSONResponse:
     if stores.repositories.get(repository_id) is None:
         return error_response(404, "repository_not_found", "Repository was not found.")
     job = stores.jobs.add(IndexingJob(repository_id=repository_id, status="queued", stage="queued", progress=0))
     add_request_identifiers(request, repository_id=repository_id, job_id=job.id)
-    return stores.jobs.advance(job.id)
+
+    job = stores.jobs.advance(job.id)
+    assert job is not None, "Job exists"
+    return job
 
 
 @app.get("/api/repositories/{owner}/{repo}/workspace", response_model=WorkspaceResponse)
-async def get_workspace(request: Request, owner: str, repo: str, stores: StoresDependency = None) -> WorkspaceResponse | JSONResponse:
+async def get_workspace(request: Request, owner: str, repo: str, stores: StoresDependency) -> WorkspaceResponse | JSONResponse:
     parsed = repository_from_route(owner, repo)
     repository = stores.repositories.get_by_route(*parsed) if parsed else None
     if repository is None:
@@ -363,6 +323,9 @@ async def get_workspace(request: Request, owner: str, repo: str, stores: StoresD
     job = stores.jobs.current_for_repository(repository.id)
     if conversation is None or job is None:
         return error_response(409, "repository_not_ready", "Repository lifecycle records are incomplete.")
+
+    job = stores.jobs.advance(job.id)
+    assert job is not None, "Job exists"
     return WorkspaceResponse(
         repository=repository,
         conversation=conversation,
@@ -371,12 +334,12 @@ async def get_workspace(request: Request, owner: str, repo: str, stores: StoresD
         starter_questions=list(STARTER_QUESTIONS),
         messages=stores.messages.list_for_conversation(conversation.id),
         passages=stores.passages.list_for_repository(repository.id),
-        job=stores.jobs.advance(job.id),
+        job=job,
     )
 
 
 @app.get("/api/repositories/{owner}/{repo}/files", response_model=FileResponse)
-async def get_file(request: Request, owner: str, repo: str, path: str = Query(...), stores: StoresDependency = None) -> FileResponse | JSONResponse:
+async def get_file(request: Request, owner: str, repo: str, stores: StoresDependency, path: str = Query(...)) -> FileResponse | JSONResponse:
     parsed = repository_from_route(owner, repo)
     repository = stores.repositories.get_by_route(*parsed) if parsed else None
     if repository is None:
@@ -389,7 +352,7 @@ async def get_file(request: Request, owner: str, repo: str, path: str = Query(..
 
 
 @app.get("/api/jobs/{job_id}", response_model=IndexingJob)
-async def get_job(request: Request, job_id: UUID, stores: StoresDependency = None) -> IndexingJob | JSONResponse:
+async def get_job(request: Request, job_id: UUID, stores: StoresDependency) -> IndexingJob | JSONResponse:
     add_request_identifiers(request, job_id=job_id)
     job = stores.jobs.advance(job_id)
     if job is None:
@@ -398,7 +361,7 @@ async def get_job(request: Request, job_id: UUID, stores: StoresDependency = Non
 
 
 @app.post("/api/jobs/{job_id}/cancel", response_model=IndexingJob)
-async def cancel_job(request: Request, job_id: UUID, stores: StoresDependency = None) -> IndexingJob | JSONResponse:
+async def cancel_job(request: Request, job_id: UUID, stores: StoresDependency) -> IndexingJob | JSONResponse:
     add_request_identifiers(request, job_id=job_id)
     try:
         job = stores.jobs.cancel(job_id)
@@ -532,7 +495,7 @@ async def stream_demo_answer(
 
 
 @app.post("/api/chat/stream")
-async def chat_stream(request: Request, payload: ChatRequest, stores: StoresDependency = None) -> Response:
+async def chat_stream(request: Request, payload: ChatRequest, stores: StoresDependency) -> Response:
     if not payload.question.strip():
         return error_response(422, "question_required", "A question is required.")
     repository = stores.repositories.get(payload.repository_id)

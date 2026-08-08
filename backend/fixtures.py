@@ -11,10 +11,15 @@ from copy import deepcopy
 from typing import Any
 from uuid import UUID
 
+
 try:
-    from .models import Citation, Conversation, Message, Repository, SourcePassage
+    from .models.api.chat_sse import Citation, Message
+    from .models.chat import Conversation
+    from .models.repository import Repository, SourcePassage, TreeNode
 except ImportError:  # Allows ``uv run main.py`` from the backend directory.
-    from models import Citation, Conversation, Message, Repository, SourcePassage
+    from models.api.chat_sse import Citation, Message
+    from models.chat import Conversation
+    from models.repository import Repository, SourcePassage, TreeNode
 
 
 DEMO_REPOSITORY_ID = UUID("11111111-1111-4111-8111-111111111111")
@@ -24,43 +29,43 @@ CHECKOUT_PASSAGE_ID = UUID("33333333-3333-4333-8333-333333333333")
 PAYMENT_PASSAGE_ID = UUID("44444444-4444-4444-8444-444444444444")
 
 
-DEMO_TREE: list[dict[str, Any]] = [
-    {
-        "name": "src",
-        "type": "folder",
-        "children": [
-            {
-                "name": "api",
-                "type": "folder",
-                "children": [
-                    {"name": "checkout.ts", "type": "file"},
-                    {"name": "orders.ts", "type": "file"},
-                    {"name": "users.ts", "type": "file"},
+DEMO_TREE: list[TreeNode] = [
+    TreeNode(
+        name="src",
+        type="folder",
+        children=[
+            TreeNode(
+                name="api",
+                type="folder",
+                children=[
+                    TreeNode(name="checkout.ts", type="file"),
+                    TreeNode(name="orders.ts", type="file"),
+                    TreeNode(name="users.ts", type="file"),
                 ],
-            },
-            {
-                "name": "services",
-                "type": "folder",
-                "children": [
-                    {"name": "payment-service.ts", "type": "file"},
-                    {"name": "inventory-service.ts", "type": "file"},
+            ),
+            TreeNode(
+                name="services",
+                type="folder",
+                children=[
+                    TreeNode(name="payment-service.ts", type="file"),
+                    TreeNode(name="inventory-service.ts", type="file"),
                 ],
-            },
-            {"name": "server.ts", "type": "file"},
-            {"name": "config.ts", "type": "file"},
+            ),
+            TreeNode(name="server.ts", type="file"),
+            TreeNode(name="config.ts", type="file"),
         ],
-    },
-    {
-        "name": "tests",
-        "type": "folder",
-        "children": [
-            {"name": "checkout.test.ts", "type": "file"},
-            {"name": "orders.test.ts", "type": "file"},
+    ),
+    TreeNode(
+        name="tests",
+        type="folder",
+        children=[
+            TreeNode(name="checkout.test.ts", type="file"),
+            TreeNode(name="orders.test.ts", type="file"),
         ],
-    },
-    {"name": "README.md", "type": "file"},
-    {"name": "package.json", "type": "file"},
-    {"name": "docker-compose.yml", "type": "file"},
+    ),
+    TreeNode(name="README.md", type="file"),
+    TreeNode(name="package.json", type="file"),
+    TreeNode(name="docker-compose.yml", type="file"),
 ]
 
 
@@ -126,7 +131,7 @@ STARTER_QUESTIONS = [
 ]
 
 
-def tree_fixture() -> list[dict[str, Any]]:
+def tree_fixture() -> list[TreeNode]:
     return deepcopy(DEMO_TREE)
 
 

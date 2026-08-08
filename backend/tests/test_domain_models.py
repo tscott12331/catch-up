@@ -4,16 +4,18 @@ from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid1
 
 import pytest
-from pydantic import ValidationError
+from pydantic import AnyHttpUrl, ValidationError
 
 from fixtures import DEMO_REPOSITORY_ID, DEMO_REVISION, messages_fixture, passages_fixture
-from models import Citation, IndexingJob, Repository, SourcePassage
+from models.api.chat_sse import Citation
+from models.jobs import IndexingJob
+from models.repository import Repository, SourcePassage
 
 
 def test_domain_models_serialize_uuid4_and_utc_timestamps() -> None:
     repository = Repository(
         id=DEMO_REPOSITORY_ID,
-        source_url="https://github.com/acme/checkout-service",
+        source_url=AnyHttpUrl("https://github.com/acme/checkout-service"),
         owner="acme",
         name="checkout-service",
         default_branch="main",

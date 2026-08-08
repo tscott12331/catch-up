@@ -8,8 +8,11 @@ from collections.abc import Iterable
 from typing import Protocol
 from uuid import UUID
 
-from models import Conversation, IndexingJob, Message, Repository, SourcePassage, utc_now
-
+from models.api.chat_sse import Message
+from models.chat import Conversation
+from models.jobs import IndexingJob
+from models.models import utc_now
+from models.repository import Repository, SourcePassage
 
 logger = logging.getLogger(__name__)
 

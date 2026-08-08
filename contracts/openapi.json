@@ -835,18 +835,11 @@
           "content": {
             "application/json": {
               "schema": {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/RepositoryRequest"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "title": "Payload"
+                "$ref": "#/components/schemas/RepositoryRequest"
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "202": {
