@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-import json
+import logging
 import os
 import re
 from collections.abc import AsyncIterator
@@ -17,20 +17,21 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, TypeAdapter
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 try:
     from .fixtures import DEMO_CONVERSATION_ID, DEMO_REPOSITORY_ID, DEMO_REVISION, FILE_CONTENT, STARTER_QUESTIONS, messages_fixture, passages_fixture, tree_fixture
-    from .models import Citation, Conversation, IndexingError, IndexingJob, Message, Repository, SourcePassage
+    from .models import ChatSseEvent, Citation, Conversation, IndexingError, IndexingJob, Message, MessageCompletedEvent, MessageDeltaEvent, MessageErrorEvent, MessageStartedEvent, Repository, SourcePassage, utc_now
     from .stores import InMemoryStores, InvalidJobTransition
 except ImportError:  # Allows ``uv run main.py`` from the backend directory.
     from fixtures import DEMO_CONVERSATION_ID, DEMO_REPOSITORY_ID, DEMO_REVISION, FILE_CONTENT, STARTER_QUESTIONS, messages_fixture, passages_fixture, tree_fixture
-    from models import Citation, Conversation, IndexingError, IndexingJob, Message, Repository, SourcePassage
+    from models import ChatSseEvent, Citation, Conversation, IndexingError, IndexingJob, Message, MessageCompletedEvent, MessageDeltaEvent, MessageErrorEvent, MessageStartedEvent, Repository, SourcePassage, utc_now
     from stores import InMemoryStores, InvalidJobTransition
 
 
 TreeNodeType = Literal["file", "folder"]
+logger = logging.getLogger(__name__)
 
 
 class TreeNode(BaseModel):
@@ -71,34 +72,8 @@ class ErrorResponse(BaseModel):
     error: ErrorDetail
 
 
-class MessageStartedEvent(BaseModel):
-    type: Literal["message.started"]
-    message_id: UUID
-
-
-class MessageDeltaEvent(BaseModel):
-    type: Literal["message.delta"]
-    text: str
-
-
-class MessageCompletedEvent(BaseModel):
-    type: Literal["message.completed"]
-    citations: list[Citation]
-
-
-class MessageErrorEvent(BaseModel):
-    type: Literal["message.error"]
-    code: str | None = None
-    message: str | None = None
-
-
-ChatSseEvent = Annotated[
-    MessageStartedEvent | MessageDeltaEvent | MessageCompletedEvent | MessageErrorEvent,
-    Field(discriminator="type"),
-]
-
-
 TreeNode.model_rebuild()
+chat_sse_event_adapter = TypeAdapter(ChatSseEvent)
 
 
 class RepositoryRequest(BaseModel):
@@ -113,8 +88,8 @@ class ConversationRequest(BaseModel):
 
 class ChatRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    repository_id: UUID | None = None
-    conversation_id: UUID | None = None
+    repository_id: UUID
+    conversation_id: UUID
     question: str = ""
 
 
@@ -177,15 +152,23 @@ def error_response(status_code: int, code: str, message: str, *, details: Any | 
 async def request_validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
     if any(error.get("type") == "json_invalid" for error in exc.errors()):
         return error_response(400, "invalid_json", "Request body must be JSON.")
-    details = jsonable_encoder(exc.errors())
-    return error_response(422, "validation_error", "Request validation failed.", details=details)
+    logger.info("Request validation failed for %s: %s", request.url.path, jsonable_encoder(exc.errors()))
+    return error_response(422, "validation_error", "Request validation failed.")
 
 
 @app.exception_handler(StarletteHTTPException)
 async def http_exception(request: Request, exc: StarletteHTTPException) -> JSONResponse:
     if exc.status_code == 404:
         return error_response(404, "not_found", "Route not found.")
-    return error_response(exc.status_code, "http_error", str(exc.detail))
+    logger.info("HTTP exception for %s: status=%s detail=%r", request.url.path, exc.status_code, exc.detail)
+    return error_response(exc.status_code, "http_error", "The request could not be completed.")
+
+
+@app.exception_handler(Exception)
+async def unexpected_error(request: Request, exc: Exception) -> JSONResponse:
+    """Keep public failures deterministic while retaining diagnostic context in logs."""
+    logger.exception("Unhandled request error for %s", request.url.path)
+    return error_response(500, "internal_error", "The server could not complete the request.")
 
 
 def validate_segment(value: str, *, owner: bool = False) -> str | None:
@@ -233,7 +216,7 @@ def register_repository(stores: InMemoryStores, *, owner: str, name: str, url: s
         conversation = stores.conversations.add(Conversation(repository_id=repository.id))
         stores.passages.add_many(passages_fixture(repository.id))
         for message in messages_fixture(repository.id, conversation.id):
-            stores.messages.add(message)
+            stores.messages.add(message.model_copy(update={"id": uuid4()}))
     else:
         conversation = stores.conversations.get_active(repository.id)
         assert conversation is not None
@@ -254,7 +237,7 @@ def file_path_from_query(path: str) -> str | None:
 
 @app.get("/health")
 async def health() -> dict[str, Any]:
-    return {"status": "ok", "service": "catch-up-backend", "phase": 3}
+    return {"status": "ok", "service": "catch-up-backend", "phase": 4}
 
 
 @app.post("/api/repositories", status_code=202, response_model=RepositoryCreateResponse)
@@ -328,51 +311,107 @@ async def get_job(job_id: UUID, stores: StoresDependency = None) -> IndexingJob 
 async def cancel_job(job_id: UUID, stores: StoresDependency = None) -> IndexingJob | JSONResponse:
     try:
         job = stores.jobs.cancel(job_id)
-    except InvalidJobTransition as error:
-        return error_response(409, "invalid_job_transition", str(error))
+    except InvalidJobTransition:
+        return error_response(409, "invalid_job_transition", "This indexing job can no longer be cancelled.")
     if job is None:
         return error_response(404, "job_not_found", "Indexing job was not found.")
     return job
 
 
+def encode_sse_event(event: ChatSseEvent) -> str:
+    """Serialize only an event that re-validates against the public discriminated union."""
+    validated = chat_sse_event_adapter.validate_python(event)
+    return f"data: {validated.model_dump_json()}\n\n"
+
+
+def replace_message_state(stores: InMemoryStores, message: Message, state: Literal["completed", "failed", "cancelled"], *, content: str | None = None, citations: list[Citation] | None = None) -> Message:
+    return stores.messages.replace(
+        message.model_copy(
+            update={
+                "completion_state": state,
+                "content": message.content if content is None else content,
+                "citations": message.citations if citations is None else citations,
+                "completed_at": utc_now(),
+            }
+        )
+    )
+
+
 async def stream_demo_answer(stores: InMemoryStores, repository: Repository, conversation: Conversation, question: str) -> AsyncIterator[str]:
-    """Yield ordered SSE events and persist the demo exchange in the active conversation."""
+    """Yield validated, ordered SSE events and persist every terminal message state."""
     message_id = uuid4()
-    stores.messages.add(Message(conversation_id=conversation.id, role="user", content=question, completion_state="completed"))
+    user_message = stores.messages.add(
+        Message(conversation_id=conversation.id, role="user", content=question, completion_state="completed", completed_at=utc_now())
+    )
+    assistant_message = stores.messages.add(
+        Message(id=message_id, conversation_id=conversation.id, role="assistant", content="", completion_state="streaming")
+    )
+    answer = ""
     try:
-        yield f"data: {json.dumps({'type': 'message.started', 'message_id': str(message_id)})}\n\n"
+        yield encode_sse_event(
+            MessageStartedEvent(
+                type="message.started",
+                repository_id=repository.id,
+                conversation_id=conversation.id,
+                message_id=assistant_message.id,
+                user_message_id=user_message.id,
+            )
+        )
         await asyncio.sleep(0.04)
         if "__stream_error__" in question:
-            stores.messages.add(Message(id=message_id, conversation_id=conversation.id, role="assistant", content="", completion_state="failed"))
             raise RuntimeError("The demo stream failed before completion.")
-        answer = ""
         for text in (
             "The checkout flow starts in the API layer, validates the cart, and coordinates payment with inventory. ",
             "The controller creates the order only after both side effects succeed; a failed inventory reservation refunds the payment.",
         ):
             answer += text
-            yield f"data: {json.dumps({'type': 'message.delta', 'text': text})}\n\n"
+            yield encode_sse_event(
+                MessageDeltaEvent(
+                    type="message.delta",
+                    repository_id=repository.id,
+                    conversation_id=conversation.id,
+                    message_id=assistant_message.id,
+                    text=text,
+                )
+            )
             await asyncio.sleep(0.04)
         citations = messages_fixture(repository.id, conversation.id)[-1].citations
-        stores.messages.add(Message(id=message_id, conversation_id=conversation.id, role="assistant", content=answer, completion_state="completed", citations=citations))
-        yield f"data: {json.dumps({'type': 'message.completed', 'citations': [citation.model_dump(mode='json') for citation in citations]})}\n\n"
+        replace_message_state(stores, assistant_message, "completed", content=answer, citations=citations)
+        yield encode_sse_event(
+            MessageCompletedEvent(
+                type="message.completed",
+                repository_id=repository.id,
+                conversation_id=conversation.id,
+                message_id=assistant_message.id,
+                citations=citations,
+            )
+        )
     except asyncio.CancelledError:
+        replace_message_state(stores, assistant_message, "cancelled", content=answer)
         raise
-    except Exception as exc:
-        yield f"data: {json.dumps({'type': 'message.error', 'code': 'stream_failed', 'message': str(exc)})}\n\n"
+    except Exception:
+        logger.exception("Chat stream failed for repository=%s conversation=%s message=%s", repository.id, conversation.id, assistant_message.id)
+        replace_message_state(stores, assistant_message, "failed", content=answer)
+        yield encode_sse_event(
+            MessageErrorEvent(
+                type="message.error",
+                repository_id=repository.id,
+                conversation_id=conversation.id,
+                message_id=assistant_message.id,
+                code="stream_failed",
+                message="The answer stream could not be completed.",
+            )
+        )
 
 
 @app.post("/api/chat/stream")
-async def chat_stream(payload: ChatRequest | None = None, stores: StoresDependency = None) -> Response:
-    payload = payload or ChatRequest()
-    if payload.repository_id is None:
-        return error_response(422, "repository_required", "A repository id is required.")
+async def chat_stream(payload: ChatRequest, stores: StoresDependency = None) -> Response:
     if not payload.question.strip():
         return error_response(422, "question_required", "A question is required.")
     repository = stores.repositories.get(payload.repository_id)
     if repository is None:
         return error_response(404, "repository_not_found", "Repository was not found.")
-    conversation = stores.conversations.get(payload.conversation_id) if payload.conversation_id else stores.conversations.get_active(repository.id)
+    conversation = stores.conversations.get(payload.conversation_id)
     if conversation is None:
         return error_response(404, "conversation_not_found", "Conversation was not found.")
     if conversation.repository_id != repository.id:

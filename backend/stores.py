@@ -24,6 +24,8 @@ class ConversationStore(Protocol):
 
 class MessageStore(Protocol):
     def add(self, message: Message) -> Message: ...
+    def get(self, message_id: UUID) -> Message | None: ...
+    def replace(self, message: Message) -> Message: ...
     def list_for_conversation(self, conversation_id: UUID) -> list[Message]: ...
 
 
@@ -84,9 +86,27 @@ class InMemoryConversationStore:
 class InMemoryMessageStore:
     def __init__(self) -> None:
         self._items: dict[UUID, list[Message]] = {}
+        self._by_id: dict[UUID, Message] = {}
 
     def add(self, message: Message) -> Message:
+        if message.id in self._by_id:
+            raise ValueError("A message with this id already exists.")
         self._items.setdefault(message.conversation_id, []).append(message)
+        self._by_id[message.id] = message
+        return message
+
+    def get(self, message_id: UUID) -> Message | None:
+        return self._by_id.get(message_id)
+
+    def replace(self, message: Message) -> Message:
+        existing = self._by_id.get(message.id)
+        if existing is None:
+            raise ValueError("Cannot replace a message that does not exist.")
+        if existing.conversation_id != message.conversation_id:
+            raise ValueError("A message cannot move to another conversation.")
+        messages = self._items[message.conversation_id]
+        self._items[message.conversation_id] = [message if item.id == message.id else item for item in messages]
+        self._by_id[message.id] = message
         return message
 
     def list_for_conversation(self, conversation_id: UUID) -> list[Message]:

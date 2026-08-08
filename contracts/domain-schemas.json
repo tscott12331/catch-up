@@ -5,17 +5,9 @@
       "additionalProperties": false,
       "properties": {
         "conversation_id": {
-          "anyOf": [
-            {
-              "format": "uuid",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Conversation Id"
+          "format": "uuid",
+          "title": "Conversation Id",
+          "type": "string"
         },
         "question": {
           "default": "",
@@ -23,19 +15,15 @@
           "type": "string"
         },
         "repository_id": {
-          "anyOf": [
-            {
-              "format": "uuid",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Repository Id"
+          "format": "uuid",
+          "title": "Repository Id",
+          "type": "string"
         }
       },
+      "required": [
+        "repository_id",
+        "conversation_id"
+      ],
       "title": "ChatRequest",
       "type": "object"
     },
@@ -523,6 +511,231 @@
         "completion_state"
       ],
       "title": "Message",
+      "type": "object"
+    },
+    "MessageCompletedEvent": {
+      "$defs": {
+        "Citation": {
+          "additionalProperties": false,
+          "properties": {
+            "end_line": {
+              "minimum": 1,
+              "title": "End Line",
+              "type": "integer"
+            },
+            "id": {
+              "description": "A UUID version 4 identifier.",
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            },
+            "passage_id": {
+              "description": "A UUID version 4 identifier.",
+              "format": "uuid",
+              "title": "Passage Id",
+              "type": "string"
+            },
+            "path": {
+              "minLength": 1,
+              "title": "Path",
+              "type": "string"
+            },
+            "revision": {
+              "minLength": 1,
+              "title": "Revision",
+              "type": "string"
+            },
+            "start_line": {
+              "minimum": 1,
+              "title": "Start Line",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "passage_id",
+            "revision",
+            "path",
+            "start_line",
+            "end_line"
+          ],
+          "title": "Citation",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "citations": {
+          "items": {
+            "$ref": "#/$defs/Citation"
+          },
+          "title": "Citations",
+          "type": "array"
+        },
+        "conversation_id": {
+          "description": "A UUID version 4 identifier.",
+          "format": "uuid",
+          "title": "Conversation Id",
+          "type": "string"
+        },
+        "message_id": {
+          "description": "A UUID version 4 identifier.",
+          "format": "uuid",
+          "title": "Message Id",
+          "type": "string"
+        },
+        "repository_id": {
+          "description": "A UUID version 4 identifier.",
+          "format": "uuid",
+          "title": "Repository Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "message.completed",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repository_id",
+        "conversation_id",
+        "message_id",
+        "type",
+        "citations"
+      ],
+      "title": "MessageCompletedEvent",
+      "type": "object"
+    },
+    "MessageDeltaEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "conversation_id": {
+          "description": "A UUID version 4 identifier.",
+          "format": "uuid",
+          "title": "Conversation Id",
+          "type": "string"
+        },
+        "message_id": {
+          "description": "A UUID version 4 identifier.",
+          "format": "uuid",
+          "title": "Message Id",
+          "type": "string"
+        },
+        "repository_id": {
+          "description": "A UUID version 4 identifier.",
+          "format": "uuid",
+          "title": "Repository Id",
+          "type": "string"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "type": {
+          "const": "message.delta",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repository_id",
+        "conversation_id",
+        "message_id",
+        "type",
+        "text"
+      ],
+      "title": "MessageDeltaEvent",
+      "type": "object"
+    },
+    "MessageErrorEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "minLength": 1,
+          "title": "Code",
+          "type": "string"
+        },
+        "conversation_id": {
+          "description": "A UUID version 4 identifier.",
+          "format": "uuid",
+          "title": "Conversation Id",
+          "type": "string"
+        },
+        "message": {
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        },
+        "message_id": {
+          "description": "A UUID version 4 identifier.",
+          "format": "uuid",
+          "title": "Message Id",
+          "type": "string"
+        },
+        "repository_id": {
+          "description": "A UUID version 4 identifier.",
+          "format": "uuid",
+          "title": "Repository Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "message.error",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repository_id",
+        "conversation_id",
+        "message_id",
+        "type",
+        "code",
+        "message"
+      ],
+      "title": "MessageErrorEvent",
+      "type": "object"
+    },
+    "MessageStartedEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "conversation_id": {
+          "description": "A UUID version 4 identifier.",
+          "format": "uuid",
+          "title": "Conversation Id",
+          "type": "string"
+        },
+        "message_id": {
+          "description": "A UUID version 4 identifier.",
+          "format": "uuid",
+          "title": "Message Id",
+          "type": "string"
+        },
+        "repository_id": {
+          "description": "A UUID version 4 identifier.",
+          "format": "uuid",
+          "title": "Repository Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "message.started",
+          "title": "Type",
+          "type": "string"
+        },
+        "user_message_id": {
+          "description": "A UUID version 4 identifier.",
+          "format": "uuid",
+          "title": "User Message Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repository_id",
+        "conversation_id",
+        "message_id",
+        "type",
+        "user_message_id"
+      ],
+      "title": "MessageStartedEvent",
       "type": "object"
     },
     "Repository": {

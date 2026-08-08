@@ -12,7 +12,6 @@ from pydantic import TypeAdapter
 
 from main import (
     ChatRequest,
-    ChatSseEvent,
     Citation,
     Conversation,
     ConversationRequest,
@@ -30,9 +29,11 @@ from main import (
     WorkspaceResponse,
     app,
 )
+from models import ChatSseEvent, MessageCompletedEvent, MessageDeltaEvent, MessageErrorEvent, MessageStartedEvent
 
 
 CONTRACTS_DIR = Path(__file__).resolve().parent.parent / "contracts"
+FRONTEND_GENERATED_DIR = Path(__file__).resolve().parent.parent / "frontend" / "app" / "_lib" / "generated"
 
 DOMAIN_MODELS = (
     Repository,
@@ -51,6 +52,10 @@ DOMAIN_MODELS = (
     RepositoryRequest,
     ChatRequest,
     ConversationRequest,
+    MessageStartedEvent,
+    MessageDeltaEvent,
+    MessageCompletedEvent,
+    MessageErrorEvent,
 )
 
 
@@ -59,6 +64,12 @@ def render_contracts() -> dict[Path, str]:
         model.__name__: model.model_json_schema(ref_template="#/$defs/{model}") for model in DOMAIN_MODELS
     }
     sse_schema = TypeAdapter(ChatSseEvent).json_schema(ref_template="#/$defs/{model}")
+    sse_contract = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "Catch-up chat SSE events",
+        "framing": "Each event is emitted as a single Server-Sent Events data frame containing JSON.",
+        "schema": sse_schema,
+    }
     outputs = {
         CONTRACTS_DIR / "openapi.json": app.openapi(),
         CONTRACTS_DIR / "domain-schemas.json": {
@@ -66,12 +77,8 @@ def render_contracts() -> dict[Path, str]:
             "title": "Catch-up domain schemas",
             "schemas": domain_schemas,
         },
-        CONTRACTS_DIR / "sse-events.json": {
-            "$schema": "https://json-schema.org/draft/2020-12/schema",
-            "title": "Catch-up chat SSE events",
-            "framing": "Each event is emitted as a single Server-Sent Events data frame containing JSON.",
-            "schema": sse_schema,
-        },
+        CONTRACTS_DIR / "sse-events.json": sse_contract,
+        FRONTEND_GENERATED_DIR / "sse-events.json": sse_contract,
     }
     return {path: json.dumps(payload, indent=2, sort_keys=True) + "\n" for path, payload in outputs.items()}
 

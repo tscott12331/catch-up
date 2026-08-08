@@ -5,16 +5,9 @@
         "additionalProperties": false,
         "properties": {
           "conversation_id": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Conversation Id"
+            "format": "uuid",
+            "title": "Conversation Id",
+            "type": "string"
           },
           "question": {
             "default": "",
@@ -22,18 +15,15 @@
             "type": "string"
           },
           "repository_id": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Repository Id"
+            "format": "uuid",
+            "title": "Repository Id",
+            "type": "string"
           }
         },
+        "required": [
+          "repository_id",
+          "conversation_id"
+        ],
         "title": "ChatRequest",
         "type": "object"
       },
@@ -673,18 +663,11 @@
           "content": {
             "application/json": {
               "schema": {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/ChatRequest"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "title": "Payload"
+                "$ref": "#/components/schemas/ChatRequest"
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "200": {

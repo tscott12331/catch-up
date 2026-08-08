@@ -214,10 +214,14 @@ export function Workspace({ repository: routeRepository }: WorkspaceProps) {
     setIsThinking(true);
 
     try {
-      for await (const event of streamChat(workspace.repository.id, question, controller.signal, workspace.conversation.id)) {
+      for await (const event of streamChat(workspace.repository.id, workspace.conversation.id, question, controller.signal)) {
         if (event.type === "message.started") {
           assistantId = event.message_id;
-          setMessages((current) => current.map((message) => message.id === localAssistantId ? { ...message, id: assistantId } : message));
+          setMessages((current) => current.map((message) => {
+            if (message.id === localAssistantId) return { ...message, id: assistantId };
+            if (message.id === userId) return { ...message, id: event.user_message_id };
+            return message;
+          }));
         } else if (event.type === "message.delta") {
           setMessages((current) => current.map((message) => message.id === assistantId ? { ...message, content: message.content + event.text } : message));
         } else if (event.type === "message.completed") {

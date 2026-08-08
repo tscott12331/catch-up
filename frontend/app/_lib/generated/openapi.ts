@@ -163,15 +163,21 @@ export interface components {
     schemas: {
         /** ChatRequest */
         ChatRequest: {
-            /** Conversation Id */
-            conversation_id?: string | null;
+            /**
+             * Conversation Id
+             * Format: uuid
+             */
+            conversation_id: string;
             /**
              * Question
              * @default
              */
             question: string;
-            /** Repository Id */
-            repository_id?: string | null;
+            /**
+             * Repository Id
+             * Format: uuid
+             */
+            repository_id: string;
         };
         /** Citation */
         Citation: {
@@ -458,9 +464,9 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: {
+        requestBody: {
             content: {
-                "application/json": components["schemas"]["ChatRequest"] | null;
+                "application/json": components["schemas"]["ChatRequest"];
             };
         };
         responses: {
