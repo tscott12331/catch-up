@@ -21,12 +21,8 @@ export function Sidebar({ repoName, branch }: SidebarProps) {
         <span className={styles.navLabel}>Workspace</span>
         <a className={`${styles.navItem} ${styles.active}`} href="#chat"><Icon name="sparkle" size={16} /> Ask the codebase</a>
         <a className={styles.navItem} href="#explorer"><Icon name="code" size={16} /> Explorer</a>
-        <span className={`${styles.navLabel} ${styles.navLabelSpaced}`}>Repository</span>
-        <a className={styles.navItem} href="#overview"><Icon name="book" size={16} /> Overview</a>
-        <a className={styles.navItem} href="#branches"><Icon name="branch" size={16} /> Branches <span className={styles.navSoon}>soon</span></a>
       </nav>
       <div className={styles.sidebarBottom}>
-        <a className={styles.navItem} href="#settings"><Icon name="settings" size={16} /> Settings</a>
         <div className={styles.localBadge}><span className={styles.statusDot} /> Running locally</div>
       </div>
     </aside>

@@ -53,7 +53,7 @@ export function ChatPanel({ messages, suggestions, input, isThinking, onInputCha
             </div>
           </article>
         ))}
-        {isThinking && <article className={`${styles.message} ${styles.assistant}`}>
+        {isThinking && !messages.some((message) => message.role === "assistant" && message.completion_state === "streaming" && message.content) && <article className={`${styles.message} ${styles.assistant}`}>
           <div className={`${styles.messageAvatar} ${styles.assistant}`}><Icon name="logo" size={15} /></div>
           <div className={styles.messageBody}><div className={styles.messageMeta}><strong>catch-up</strong><span>· searching sources</span></div><div className={styles.thinking}><i /><i /><i /></div></div>
         </article>}

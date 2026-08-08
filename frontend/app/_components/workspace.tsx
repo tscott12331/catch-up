@@ -164,9 +164,16 @@ export function Workspace({ repository: routeRepository }: WorkspaceProps) {
   }
 
   function selectCitation(citation: Citation) {
+    setExpanded((current) => new Set([...current, ...parentFolders(citation.path)]));
     setCitationHighlight(citation);
     setPreview({ status: "loading" });
     setActiveFile(citation.path);
+  }
+
+  function closePreview() {
+    setCitationHighlight(null);
+    setPreview({ status: "idle" });
+    setActiveFile("");
   }
 
   function retryWorkspace() {
@@ -283,7 +290,7 @@ export function Workspace({ repository: routeRepository }: WorkspaceProps) {
         {jobError && <div className={styles.workspaceNotice} role="alert"><span>{jobError}</span><button onClick={retryWorkspace}>Retry</button></div>}
         <div className={styles.workspaceGrid}>
           <ChatPanel messages={messages} suggestions={workspace.starter_questions} input={input} isThinking={isThinking} onInputChange={setInput} onSubmit={submitQuestion} onNewChat={() => void resetChat()} onSelectCitation={selectCitation} onRetry={(question) => void runQuestion(question)} />
-          <RepositoryExplorer repoName={workspace.repository.name} visibleTree={visibleTree} explorerFilter={explorerFilter} expanded={expanded} activeFile={activeFile} previewLines={previewLines} previewStatus={preview.status} previewMessage={preview.status === "unavailable" ? preview.message : ""} highlightedRange={citationHighlight} onFilterChange={setExplorerFilter} onToggleFolder={toggleFolder} onSelectFile={selectFile} />
+          <RepositoryExplorer repoName={workspace.repository.name} visibleTree={visibleTree} explorerFilter={explorerFilter} expanded={expanded} activeFile={activeFile} previewLines={previewLines} previewStatus={preview.status} previewMessage={preview.status === "unavailable" ? preview.message : ""} highlightedRange={citationHighlight} onFilterChange={setExplorerFilter} onToggleFolder={toggleFolder} onSelectFile={selectFile} onClosePreview={closePreview} />
         </div>
       </section>
     </main>

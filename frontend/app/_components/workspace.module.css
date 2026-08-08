@@ -274,6 +274,26 @@
   color: var(--ink);
 }
 
+.iconButton:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+
+.copyAction {
+  position: relative;
+}
+
+.copyFeedback {
+  position: absolute;
+  top: 34px;
+  right: 0;
+  z-index: 1;
+  width: max-content;
+  max-width: 210px;
+  color: #66716a;
+  font-size: 10px;
+}
+
 .progressTrack {
   height: 2px;
   background: #e5ebe7;
