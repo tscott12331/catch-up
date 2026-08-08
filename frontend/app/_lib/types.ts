@@ -24,21 +24,33 @@ export type IconName =
 
 export type Citation = components["schemas"]["Citation"];
 
-export type ChatMessage = components["schemas"]["ChatMessage"] & {
+export type Message = components["schemas"]["Message"];
+
+export type Conversation = components["schemas"]["Conversation"];
+
+export type SourcePassage = components["schemas"]["SourcePassage"];
+
+export type IndexingError = components["schemas"]["IndexingError"];
+
+export type DisplayMessage = Message & {
   error?: string;
   retryQuestion?: string;
 };
 
 export type TreeNode = components["schemas"]["TreeNode"];
 
-export type RepositoryIdentity = components["schemas"]["RepositoryIdentity"];
+export type Repository = components["schemas"]["Repository"];
 
 export type JobStatus = components["schemas"]["IndexingJob"]["status"];
 
+export type JobStage = components["schemas"]["IndexingJob"]["stage"];
+
+export type MessageCompletionState = components["schemas"]["Message"]["completion_state"];
+
 export type IndexingJob = components["schemas"]["IndexingJob"];
 
-export type WorkspacePayload = Omit<components["schemas"]["WorkspaceResponse"], "messages"> & {
-  messages: ChatMessage[];
-};
+export type WorkspacePayload = components["schemas"]["WorkspaceResponse"];
+
+export type RepositoryCreateResponse = components["schemas"]["RepositoryCreateResponse"];
 
 export type IconPathMap = Record<IconName, ReactNode>;

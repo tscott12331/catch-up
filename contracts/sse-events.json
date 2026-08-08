@@ -4,22 +4,45 @@
   "schema": {
     "$defs": {
       "Citation": {
+        "additionalProperties": false,
         "properties": {
           "end_line": {
+            "minimum": 1,
             "title": "End Line",
             "type": "integer"
           },
-          "file": {
-            "title": "File",
+          "id": {
+            "description": "A UUID version 4 identifier.",
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "passage_id": {
+            "description": "A UUID version 4 identifier.",
+            "format": "uuid",
+            "title": "Passage Id",
+            "type": "string"
+          },
+          "path": {
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          },
+          "revision": {
+            "minLength": 1,
+            "title": "Revision",
             "type": "string"
           },
           "start_line": {
+            "minimum": 1,
             "title": "Start Line",
             "type": "integer"
           }
         },
         "required": [
-          "file",
+          "passage_id",
+          "revision",
+          "path",
           "start_line",
           "end_line"
         ],
@@ -108,6 +131,7 @@
       "MessageStartedEvent": {
         "properties": {
           "message_id": {
+            "format": "uuid",
             "title": "Message Id",
             "type": "string"
           },

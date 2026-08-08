@@ -1,10 +1,10 @@
 import type { KeyboardEvent, SubmitEvent } from "react";
 import { Icon } from "./icon";
-import type { ChatMessage, Citation } from "../_lib/types";
+import type { Citation, DisplayMessage } from "../_lib/types";
 import styles from "./workspace.module.css";
 
 type ChatPanelProps = {
-  messages: ChatMessage[];
+  messages: DisplayMessage[];
   suggestions: string[];
   input: string;
   isThinking: boolean;
@@ -44,8 +44,8 @@ export function ChatPanel({ messages, suggestions, input, isThinking, onInputCha
               {message.citations && <div className={styles.citations}>
                 <span className={styles.citationLabel}>Sources</span>
                 {message.citations.map((citation) => (
-                  <button className={styles.citation} key={`${citation.file}-${citation.start_line}`} onClick={() => onSelectCitation(citation)}>
-                    <Icon name="file" size={13} /><span>{citation.file}</span><small>{citation.start_line}–{citation.end_line}</small>
+                  <button className={styles.citation} key={`${citation.passage_id}-${citation.start_line}`} onClick={() => onSelectCitation(citation)}>
+                    <Icon name="file" size={13} /><span>{citation.path}</span><small>{citation.start_line}–{citation.end_line}</small>
                   </button>
                 ))}
               </div>}

@@ -1,73 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "schemas": {
-    "ChatMessage": {
-      "$defs": {
-        "Citation": {
-          "properties": {
-            "end_line": {
-              "title": "End Line",
-              "type": "integer"
-            },
-            "file": {
-              "title": "File",
-              "type": "string"
-            },
-            "start_line": {
-              "title": "Start Line",
-              "type": "integer"
-            }
-          },
-          "required": [
-            "file",
-            "start_line",
-            "end_line"
-          ],
-          "title": "Citation",
-          "type": "object"
-        }
-      },
-      "properties": {
-        "citations": {
-          "anyOf": [
-            {
-              "items": {
-                "$ref": "#/$defs/Citation"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Citations"
-        },
-        "content": {
-          "title": "Content",
-          "type": "string"
-        },
-        "id": {
-          "title": "Id",
-          "type": "string"
-        },
-        "role": {
-          "enum": [
-            "user",
-            "assistant"
-          ],
-          "title": "Role",
-          "type": "string"
-        }
-      },
-      "required": [
-        "id",
-        "role",
-        "content"
-      ],
-      "title": "ChatMessage",
-      "type": "object"
-    },
     "ChatRequest": {
       "additionalProperties": false,
       "properties": {
@@ -86,26 +19,81 @@
       "type": "object"
     },
     "Citation": {
+      "additionalProperties": false,
       "properties": {
         "end_line": {
+          "minimum": 1,
           "title": "End Line",
           "type": "integer"
         },
-        "file": {
-          "title": "File",
+        "id": {
+          "description": "A UUID version 4 identifier.",
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "passage_id": {
+          "description": "A UUID version 4 identifier.",
+          "format": "uuid",
+          "title": "Passage Id",
+          "type": "string"
+        },
+        "path": {
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "revision": {
+          "minLength": 1,
+          "title": "Revision",
           "type": "string"
         },
         "start_line": {
+          "minimum": 1,
           "title": "Start Line",
           "type": "integer"
         }
       },
       "required": [
-        "file",
+        "passage_id",
+        "revision",
+        "path",
         "start_line",
         "end_line"
       ],
       "title": "Citation",
+      "type": "object"
+    },
+    "Conversation": {
+      "additionalProperties": false,
+      "properties": {
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "id": {
+          "description": "A UUID version 4 identifier.",
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "repository_id": {
+          "description": "A UUID version 4 identifier.",
+          "format": "uuid",
+          "title": "Repository Id",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repository_id"
+      ],
+      "title": "Conversation",
       "type": "object"
     },
     "ErrorDetail": {
@@ -196,97 +184,546 @@
       "title": "FileResponse",
       "type": "object"
     },
-    "IndexingJob": {
+    "IndexingError": {
+      "additionalProperties": false,
       "properties": {
+        "code": {
+          "minLength": 1,
+          "title": "Code",
+          "type": "string"
+        },
+        "details": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Details"
+        },
+        "message": {
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        },
+        "retriable": {
+          "default": false,
+          "title": "Retriable",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "title": "IndexingError",
+      "type": "object"
+    },
+    "IndexingJob": {
+      "$defs": {
+        "IndexingError": {
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "minLength": 1,
+              "title": "Code",
+              "type": "string"
+            },
+            "details": {
+              "anyOf": [
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Details"
+            },
+            "message": {
+              "minLength": 1,
+              "title": "Message",
+              "type": "string"
+            },
+            "retriable": {
+              "default": false,
+              "title": "Retriable",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "code",
+            "message"
+          ],
+          "title": "IndexingError",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "completed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completed At"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IndexingError"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "id": {
+          "description": "A UUID version 4 identifier.",
+          "format": "uuid",
           "title": "Id",
           "type": "string"
         },
         "progress": {
+          "maximum": 100,
+          "minimum": 0,
           "title": "Progress",
           "type": "integer"
+        },
+        "repository_id": {
+          "description": "A UUID version 4 identifier.",
+          "format": "uuid",
+          "title": "Repository Id",
+          "type": "string"
+        },
+        "stage": {
+          "enum": [
+            "queued",
+            "cloning",
+            "discovering",
+            "parsing",
+            "indexing",
+            "finalizing",
+            "completed",
+            "failed",
+            "cancelled"
+          ],
+          "title": "Stage",
+          "type": "string"
+        },
+        "started_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Started At"
         },
         "status": {
           "enum": [
             "queued",
             "indexing",
             "completed",
-            "failed"
+            "failed",
+            "cancelled"
           ],
           "title": "Status",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
           "type": "string"
         }
       },
       "required": [
-        "id",
+        "repository_id",
         "status",
+        "stage",
         "progress"
       ],
       "title": "IndexingJob",
       "type": "object"
     },
+    "Message": {
+      "$defs": {
+        "Citation": {
+          "additionalProperties": false,
+          "properties": {
+            "end_line": {
+              "minimum": 1,
+              "title": "End Line",
+              "type": "integer"
+            },
+            "id": {
+              "description": "A UUID version 4 identifier.",
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            },
+            "passage_id": {
+              "description": "A UUID version 4 identifier.",
+              "format": "uuid",
+              "title": "Passage Id",
+              "type": "string"
+            },
+            "path": {
+              "minLength": 1,
+              "title": "Path",
+              "type": "string"
+            },
+            "revision": {
+              "minLength": 1,
+              "title": "Revision",
+              "type": "string"
+            },
+            "start_line": {
+              "minimum": 1,
+              "title": "Start Line",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "passage_id",
+            "revision",
+            "path",
+            "start_line",
+            "end_line"
+          ],
+          "title": "Citation",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "citations": {
+          "items": {
+            "$ref": "#/$defs/Citation"
+          },
+          "title": "Citations",
+          "type": "array"
+        },
+        "completed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completed At"
+        },
+        "completion_state": {
+          "enum": [
+            "pending",
+            "streaming",
+            "completed",
+            "failed",
+            "cancelled"
+          ],
+          "title": "Completion State",
+          "type": "string"
+        },
+        "content": {
+          "title": "Content",
+          "type": "string"
+        },
+        "conversation_id": {
+          "description": "A UUID version 4 identifier.",
+          "format": "uuid",
+          "title": "Conversation Id",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "id": {
+          "description": "A UUID version 4 identifier.",
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "user",
+            "assistant"
+          ],
+          "title": "Role",
+          "type": "string"
+        }
+      },
+      "required": [
+        "conversation_id",
+        "role",
+        "content",
+        "completion_state"
+      ],
+      "title": "Message",
+      "type": "object"
+    },
+    "Repository": {
+      "additionalProperties": false,
+      "properties": {
+        "default_branch": {
+          "minLength": 1,
+          "title": "Default Branch",
+          "type": "string"
+        },
+        "id": {
+          "description": "A UUID version 4 identifier.",
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "indexed_revision": {
+          "minLength": 1,
+          "title": "Indexed Revision",
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "owner": {
+          "minLength": 1,
+          "title": "Owner",
+          "type": "string"
+        },
+        "source_url": {
+          "format": "uri",
+          "minLength": 1,
+          "title": "Source Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_url",
+        "owner",
+        "name",
+        "default_branch",
+        "indexed_revision"
+      ],
+      "title": "Repository",
+      "type": "object"
+    },
     "RepositoryCreateResponse": {
       "$defs": {
-        "IndexingJob": {
+        "IndexingError": {
+          "additionalProperties": false,
           "properties": {
+            "code": {
+              "minLength": 1,
+              "title": "Code",
+              "type": "string"
+            },
+            "details": {
+              "anyOf": [
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Details"
+            },
+            "message": {
+              "minLength": 1,
+              "title": "Message",
+              "type": "string"
+            },
+            "retriable": {
+              "default": false,
+              "title": "Retriable",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "code",
+            "message"
+          ],
+          "title": "IndexingError",
+          "type": "object"
+        },
+        "IndexingJob": {
+          "additionalProperties": false,
+          "properties": {
+            "completed_at": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Completed At"
+            },
+            "created_at": {
+              "format": "date-time",
+              "title": "Created At",
+              "type": "string"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/IndexingError"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
             "id": {
+              "description": "A UUID version 4 identifier.",
+              "format": "uuid",
               "title": "Id",
               "type": "string"
             },
             "progress": {
+              "maximum": 100,
+              "minimum": 0,
               "title": "Progress",
               "type": "integer"
+            },
+            "repository_id": {
+              "description": "A UUID version 4 identifier.",
+              "format": "uuid",
+              "title": "Repository Id",
+              "type": "string"
+            },
+            "stage": {
+              "enum": [
+                "queued",
+                "cloning",
+                "discovering",
+                "parsing",
+                "indexing",
+                "finalizing",
+                "completed",
+                "failed",
+                "cancelled"
+              ],
+              "title": "Stage",
+              "type": "string"
+            },
+            "started_at": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Started At"
             },
             "status": {
               "enum": [
                 "queued",
                 "indexing",
                 "completed",
-                "failed"
+                "failed",
+                "cancelled"
               ],
               "title": "Status",
+              "type": "string"
+            },
+            "updated_at": {
+              "format": "date-time",
+              "title": "Updated At",
               "type": "string"
             }
           },
           "required": [
-            "id",
+            "repository_id",
             "status",
+            "stage",
             "progress"
           ],
           "title": "IndexingJob",
           "type": "object"
         },
-        "RepositoryIdentity": {
+        "Repository": {
+          "additionalProperties": false,
           "properties": {
             "default_branch": {
+              "minLength": 1,
               "title": "Default Branch",
               "type": "string"
             },
             "id": {
+              "description": "A UUID version 4 identifier.",
+              "format": "uuid",
               "title": "Id",
               "type": "string"
             },
+            "indexed_revision": {
+              "minLength": 1,
+              "title": "Indexed Revision",
+              "type": "string"
+            },
             "name": {
+              "minLength": 1,
               "title": "Name",
               "type": "string"
             },
             "owner": {
+              "minLength": 1,
               "title": "Owner",
               "type": "string"
             },
-            "url": {
-              "title": "Url",
+            "source_url": {
+              "format": "uri",
+              "minLength": 1,
+              "title": "Source Url",
               "type": "string"
             }
           },
           "required": [
-            "id",
+            "source_url",
             "owner",
             "name",
-            "url",
-            "default_branch"
+            "default_branch",
+            "indexed_revision"
           ],
-          "title": "RepositoryIdentity",
+          "title": "Repository",
           "type": "object"
         }
       },
@@ -295,7 +732,7 @@
           "$ref": "#/$defs/IndexingJob"
         },
         "repository": {
-          "$ref": "#/$defs/RepositoryIdentity"
+          "$ref": "#/$defs/Repository"
         }
       },
       "required": [
@@ -303,39 +740,6 @@
         "job"
       ],
       "title": "RepositoryCreateResponse",
-      "type": "object"
-    },
-    "RepositoryIdentity": {
-      "properties": {
-        "default_branch": {
-          "title": "Default Branch",
-          "type": "string"
-        },
-        "id": {
-          "title": "Id",
-          "type": "string"
-        },
-        "name": {
-          "title": "Name",
-          "type": "string"
-        },
-        "owner": {
-          "title": "Owner",
-          "type": "string"
-        },
-        "url": {
-          "title": "Url",
-          "type": "string"
-        }
-      },
-      "required": [
-        "id",
-        "owner",
-        "name",
-        "url",
-        "default_branch"
-      ],
-      "title": "RepositoryIdentity",
       "type": "object"
     },
     "RepositoryRequest": {
@@ -348,6 +752,62 @@
         }
       },
       "title": "RepositoryRequest",
+      "type": "object"
+    },
+    "SourcePassage": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "title": "Content",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "end_line": {
+          "minimum": 1,
+          "title": "End Line",
+          "type": "integer"
+        },
+        "id": {
+          "description": "A UUID version 4 identifier.",
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "path": {
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "repository_id": {
+          "description": "A UUID version 4 identifier.",
+          "format": "uuid",
+          "title": "Repository Id",
+          "type": "string"
+        },
+        "revision": {
+          "minLength": 1,
+          "title": "Revision",
+          "type": "string"
+        },
+        "start_line": {
+          "minimum": 1,
+          "title": "Start Line",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "repository_id",
+        "revision",
+        "path",
+        "start_line",
+        "end_line",
+        "content"
+      ],
+      "title": "SourcePassage",
       "type": "object"
     },
     "TreeNode": {
@@ -394,28 +854,279 @@
     },
     "WorkspaceResponse": {
       "$defs": {
-        "ChatMessage": {
+        "Citation": {
+          "additionalProperties": false,
           "properties": {
-            "citations": {
+            "end_line": {
+              "minimum": 1,
+              "title": "End Line",
+              "type": "integer"
+            },
+            "id": {
+              "description": "A UUID version 4 identifier.",
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            },
+            "passage_id": {
+              "description": "A UUID version 4 identifier.",
+              "format": "uuid",
+              "title": "Passage Id",
+              "type": "string"
+            },
+            "path": {
+              "minLength": 1,
+              "title": "Path",
+              "type": "string"
+            },
+            "revision": {
+              "minLength": 1,
+              "title": "Revision",
+              "type": "string"
+            },
+            "start_line": {
+              "minimum": 1,
+              "title": "Start Line",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "passage_id",
+            "revision",
+            "path",
+            "start_line",
+            "end_line"
+          ],
+          "title": "Citation",
+          "type": "object"
+        },
+        "Conversation": {
+          "additionalProperties": false,
+          "properties": {
+            "created_at": {
+              "format": "date-time",
+              "title": "Created At",
+              "type": "string"
+            },
+            "id": {
+              "description": "A UUID version 4 identifier.",
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            },
+            "repository_id": {
+              "description": "A UUID version 4 identifier.",
+              "format": "uuid",
+              "title": "Repository Id",
+              "type": "string"
+            },
+            "updated_at": {
+              "format": "date-time",
+              "title": "Updated At",
+              "type": "string"
+            }
+          },
+          "required": [
+            "repository_id"
+          ],
+          "title": "Conversation",
+          "type": "object"
+        },
+        "IndexingError": {
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "minLength": 1,
+              "title": "Code",
+              "type": "string"
+            },
+            "details": {
               "anyOf": [
                 {
-                  "items": {
-                    "$ref": "#/$defs/Citation"
-                  },
-                  "type": "array"
+                  "additionalProperties": true,
+                  "type": "object"
                 },
                 {
                   "type": "null"
                 }
               ],
               "default": null,
-              "title": "Citations"
+              "title": "Details"
+            },
+            "message": {
+              "minLength": 1,
+              "title": "Message",
+              "type": "string"
+            },
+            "retriable": {
+              "default": false,
+              "title": "Retriable",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "code",
+            "message"
+          ],
+          "title": "IndexingError",
+          "type": "object"
+        },
+        "IndexingJob": {
+          "additionalProperties": false,
+          "properties": {
+            "completed_at": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Completed At"
+            },
+            "created_at": {
+              "format": "date-time",
+              "title": "Created At",
+              "type": "string"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/IndexingError"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "id": {
+              "description": "A UUID version 4 identifier.",
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            },
+            "progress": {
+              "maximum": 100,
+              "minimum": 0,
+              "title": "Progress",
+              "type": "integer"
+            },
+            "repository_id": {
+              "description": "A UUID version 4 identifier.",
+              "format": "uuid",
+              "title": "Repository Id",
+              "type": "string"
+            },
+            "stage": {
+              "enum": [
+                "queued",
+                "cloning",
+                "discovering",
+                "parsing",
+                "indexing",
+                "finalizing",
+                "completed",
+                "failed",
+                "cancelled"
+              ],
+              "title": "Stage",
+              "type": "string"
+            },
+            "started_at": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Started At"
+            },
+            "status": {
+              "enum": [
+                "queued",
+                "indexing",
+                "completed",
+                "failed",
+                "cancelled"
+              ],
+              "title": "Status",
+              "type": "string"
+            },
+            "updated_at": {
+              "format": "date-time",
+              "title": "Updated At",
+              "type": "string"
+            }
+          },
+          "required": [
+            "repository_id",
+            "status",
+            "stage",
+            "progress"
+          ],
+          "title": "IndexingJob",
+          "type": "object"
+        },
+        "Message": {
+          "additionalProperties": false,
+          "properties": {
+            "citations": {
+              "items": {
+                "$ref": "#/$defs/Citation"
+              },
+              "title": "Citations",
+              "type": "array"
+            },
+            "completed_at": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Completed At"
+            },
+            "completion_state": {
+              "enum": [
+                "pending",
+                "streaming",
+                "completed",
+                "failed",
+                "cancelled"
+              ],
+              "title": "Completion State",
+              "type": "string"
             },
             "content": {
               "title": "Content",
               "type": "string"
             },
+            "conversation_id": {
+              "description": "A UUID version 4 identifier.",
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            },
+            "created_at": {
+              "format": "date-time",
+              "title": "Created At",
+              "type": "string"
+            },
             "id": {
+              "description": "A UUID version 4 identifier.",
+              "format": "uuid",
               "title": "Id",
               "type": "string"
             },
@@ -429,96 +1140,114 @@
             }
           },
           "required": [
-            "id",
+            "conversation_id",
             "role",
-            "content"
+            "content",
+            "completion_state"
           ],
-          "title": "ChatMessage",
+          "title": "Message",
           "type": "object"
         },
-        "Citation": {
+        "Repository": {
+          "additionalProperties": false,
           "properties": {
+            "default_branch": {
+              "minLength": 1,
+              "title": "Default Branch",
+              "type": "string"
+            },
+            "id": {
+              "description": "A UUID version 4 identifier.",
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            },
+            "indexed_revision": {
+              "minLength": 1,
+              "title": "Indexed Revision",
+              "type": "string"
+            },
+            "name": {
+              "minLength": 1,
+              "title": "Name",
+              "type": "string"
+            },
+            "owner": {
+              "minLength": 1,
+              "title": "Owner",
+              "type": "string"
+            },
+            "source_url": {
+              "format": "uri",
+              "minLength": 1,
+              "title": "Source Url",
+              "type": "string"
+            }
+          },
+          "required": [
+            "source_url",
+            "owner",
+            "name",
+            "default_branch",
+            "indexed_revision"
+          ],
+          "title": "Repository",
+          "type": "object"
+        },
+        "SourcePassage": {
+          "additionalProperties": false,
+          "properties": {
+            "content": {
+              "title": "Content",
+              "type": "string"
+            },
+            "created_at": {
+              "format": "date-time",
+              "title": "Created At",
+              "type": "string"
+            },
             "end_line": {
+              "minimum": 1,
               "title": "End Line",
               "type": "integer"
             },
-            "file": {
-              "title": "File",
+            "id": {
+              "description": "A UUID version 4 identifier.",
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            },
+            "path": {
+              "minLength": 1,
+              "title": "Path",
+              "type": "string"
+            },
+            "repository_id": {
+              "description": "A UUID version 4 identifier.",
+              "format": "uuid",
+              "title": "Repository Id",
+              "type": "string"
+            },
+            "revision": {
+              "minLength": 1,
+              "title": "Revision",
               "type": "string"
             },
             "start_line": {
+              "minimum": 1,
               "title": "Start Line",
               "type": "integer"
             }
           },
           "required": [
-            "file",
+            "repository_id",
+            "revision",
+            "path",
             "start_line",
-            "end_line"
+            "end_line",
+            "content"
           ],
-          "title": "Citation",
-          "type": "object"
-        },
-        "IndexingJob": {
-          "properties": {
-            "id": {
-              "title": "Id",
-              "type": "string"
-            },
-            "progress": {
-              "title": "Progress",
-              "type": "integer"
-            },
-            "status": {
-              "enum": [
-                "queued",
-                "indexing",
-                "completed",
-                "failed"
-              ],
-              "title": "Status",
-              "type": "string"
-            }
-          },
-          "required": [
-            "id",
-            "status",
-            "progress"
-          ],
-          "title": "IndexingJob",
-          "type": "object"
-        },
-        "RepositoryIdentity": {
-          "properties": {
-            "default_branch": {
-              "title": "Default Branch",
-              "type": "string"
-            },
-            "id": {
-              "title": "Id",
-              "type": "string"
-            },
-            "name": {
-              "title": "Name",
-              "type": "string"
-            },
-            "owner": {
-              "title": "Owner",
-              "type": "string"
-            },
-            "url": {
-              "title": "Url",
-              "type": "string"
-            }
-          },
-          "required": [
-            "id",
-            "owner",
-            "name",
-            "url",
-            "default_branch"
-          ],
-          "title": "RepositoryIdentity",
+          "title": "SourcePassage",
           "type": "object"
         },
         "TreeNode": {
@@ -560,18 +1289,28 @@
         }
       },
       "properties": {
+        "conversation": {
+          "$ref": "#/$defs/Conversation"
+        },
         "job": {
           "$ref": "#/$defs/IndexingJob"
         },
         "messages": {
           "items": {
-            "$ref": "#/$defs/ChatMessage"
+            "$ref": "#/$defs/Message"
           },
           "title": "Messages",
           "type": "array"
         },
+        "passages": {
+          "items": {
+            "$ref": "#/$defs/SourcePassage"
+          },
+          "title": "Passages",
+          "type": "array"
+        },
         "repository": {
-          "$ref": "#/$defs/RepositoryIdentity"
+          "$ref": "#/$defs/Repository"
         },
         "selected_file": {
           "title": "Selected File",
@@ -594,10 +1333,12 @@
       },
       "required": [
         "repository",
+        "conversation",
         "tree",
         "selected_file",
         "starter_questions",
         "messages",
+        "passages",
         "job"
       ],
       "title": "WorkspaceResponse",

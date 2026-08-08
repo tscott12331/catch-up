@@ -11,17 +11,20 @@ from typing import Any
 from pydantic import TypeAdapter
 
 from main import (
-    ChatMessage,
     ChatRequest,
     ChatSseEvent,
     Citation,
+    Conversation,
     ErrorDetail,
     ErrorResponse,
     FileResponse,
+    IndexingError,
     IndexingJob,
+    Message,
     RepositoryCreateResponse,
-    RepositoryIdentity,
+    Repository,
     RepositoryRequest,
+    SourcePassage,
     TreeNode,
     WorkspaceResponse,
     app,
@@ -31,11 +34,14 @@ from main import (
 CONTRACTS_DIR = Path(__file__).resolve().parent.parent / "contracts"
 
 DOMAIN_MODELS = (
+    Repository,
+    IndexingError,
+    IndexingJob,
+    Conversation,
+    Message,
+    SourcePassage,
     Citation,
     TreeNode,
-    RepositoryIdentity,
-    IndexingJob,
-    ChatMessage,
     RepositoryCreateResponse,
     WorkspaceResponse,
     FileResponse,

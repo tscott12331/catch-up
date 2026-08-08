@@ -4,7 +4,7 @@ import type { SubmitEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getFile, getJob, getWorkspace, streamChat } from "../_lib/api";
 import type { RepositoryRoute } from "../_lib/repository";
-import type { Citation, IndexingJob, TreeNode, WorkspacePayload } from "../_lib/types";
+import type { Citation, DisplayMessage, IndexingJob, TreeNode, WorkspacePayload } from "../_lib/types";
 import { ChatPanel } from "./chat-panel";
 import { RepositoryExplorer } from "./repository-explorer";
 import { Sidebar } from "./sidebar";
@@ -53,7 +53,7 @@ export function Workspace({ repository: routeRepository }: WorkspaceProps) {
   const [activeFile, setActiveFile] = useState("");
   const [explorerFilter, setExplorerFilter] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [messages, setMessages] = useState<WorkspacePayload["messages"]>([]);
+  const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [citationHighlight, setCitationHighlight] = useState<Citation | null>(null);
   const [preview, setPreview] = useState<PreviewState>({ status: "idle" });
   const streamController = useRef<AbortController | null>(null);
@@ -75,7 +75,7 @@ export function Workspace({ repository: routeRepository }: WorkspaceProps) {
       if (!mounted.current) return;
       setWorkspace(payload);
       setJob(payload.job);
-      setJobError(payload.job.status === "failed" ? "Indexing failed. Retry the workspace to check again." : "");
+      setJobError(payload.job.status === "failed" ? "Indexing failed. Retry the workspace to check again." : payload.job.status === "cancelled" ? "Indexing was cancelled." : "");
       setActiveFile(payload.selected_file);
       setExpanded(parentFolders(payload.selected_file));
       setMessages(payload.messages);
@@ -94,7 +94,7 @@ export function Workspace({ repository: routeRepository }: WorkspaceProps) {
   }, [loadWorkspace]);
 
   useEffect(() => {
-    if (!workspace || workspace.job.status === "completed" || workspace.job.status === "failed") return;
+    if (!workspace || workspace.job.status === "completed" || workspace.job.status === "failed" || workspace.job.status === "cancelled") return;
     const jobId = workspace.job.id;
     let cancelled = false;
     let timer: number | undefined;
@@ -105,11 +105,12 @@ export function Workspace({ repository: routeRepository }: WorkspaceProps) {
         const nextJob = await getJob(jobId, controller.signal);
         if (cancelled) return;
         setJob((current) => {
-          if (!current || nextJob.status === "completed" || nextJob.status === "failed" || nextJob.progress >= current.progress) return nextJob;
+          if (!current || nextJob.status === "completed" || nextJob.status === "failed" || nextJob.status === "cancelled" || nextJob.progress >= current.progress) return nextJob;
           return current;
         });
-        if (nextJob.status === "completed" || nextJob.status === "failed") {
+        if (nextJob.status === "completed" || nextJob.status === "failed" || nextJob.status === "cancelled") {
           if (nextJob.status === "failed") setJobError("Indexing failed. Retry the workspace to check again.");
+          if (nextJob.status === "cancelled") setJobError("Indexing was cancelled.");
           return;
         }
         timer = window.setTimeout(() => void poll(), 450);
@@ -165,7 +166,7 @@ export function Workspace({ repository: routeRepository }: WorkspaceProps) {
   function selectCitation(citation: Citation) {
     setCitationHighlight(citation);
     setPreview({ status: "loading" });
-    setActiveFile(citation.file);
+    setActiveFile(citation.path);
   }
 
   function retryWorkspace() {
@@ -185,13 +186,14 @@ export function Workspace({ repository: routeRepository }: WorkspaceProps) {
     streamController.current = controller;
     const userId = `user-${Date.now()}`;
     const localAssistantId = `assistant-${Date.now()}`;
+    const createdAt = new Date().toISOString();
     let assistantId = localAssistantId;
     let completed = false;
     let streamError = "";
     setMessages((current) => [
       ...current,
-      { id: userId, role: "user", content: question },
-      { id: localAssistantId, role: "assistant", content: "" },
+      { id: userId, conversation_id: workspace.conversation.id, role: "user", content: question, completion_state: "completed", created_at: createdAt, completed_at: createdAt, citations: [] },
+      { id: localAssistantId, conversation_id: workspace.conversation.id, role: "assistant", content: "", completion_state: "streaming", created_at: createdAt, completed_at: null, citations: [] },
     ]);
     setInput("");
     setIsThinking(true);
@@ -205,7 +207,7 @@ export function Workspace({ repository: routeRepository }: WorkspaceProps) {
           setMessages((current) => current.map((message) => message.id === assistantId ? { ...message, content: message.content + event.text } : message));
         } else if (event.type === "message.completed") {
           completed = true;
-          setMessages((current) => current.map((message) => message.id === assistantId ? { ...message, citations: event.citations } : message));
+          setMessages((current) => current.map((message) => message.id === assistantId ? { ...message, citations: event.citations, completion_state: "completed", completed_at: new Date().toISOString() } : message));
         } else if (event.type === "message.error") {
           streamError = event.message || "The answer stream failed. Try the question again.";
           break;
@@ -216,7 +218,7 @@ export function Workspace({ repository: routeRepository }: WorkspaceProps) {
       if (!isAbortError(error)) streamError = error instanceof Error ? error.message : "The answer could not be loaded. Try again.";
     } finally {
       if (streamError && mounted.current) {
-        setMessages((current) => current.map((message) => message.id === assistantId ? { ...message, content: message.content || "I couldn’t complete that answer.", error: streamError, retryQuestion: question } : message));
+        setMessages((current) => current.map((message) => message.id === assistantId ? { ...message, content: message.content || "I couldn’t complete that answer.", completion_state: "failed", completed_at: new Date().toISOString(), error: streamError, retryQuestion: question } : message));
       }
       if (mounted.current) setIsThinking(false);
       if (streamController.current === controller) streamController.current = null;

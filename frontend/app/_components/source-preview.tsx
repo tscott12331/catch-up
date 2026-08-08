@@ -20,7 +20,7 @@ export function SourcePreview({ activeFile, previewLines, status, message, highl
         {status === "idle" && <div className={styles.previewState}>Select a source file to preview its contents.</div>}
         {status === "ready" && previewLines.map((line, index) => {
           const lineNumber = index + 1;
-          const highlighted = highlightedRange?.file === activeFile && lineNumber >= highlightedRange.start_line && lineNumber <= highlightedRange.end_line;
+          const highlighted = highlightedRange?.path === activeFile && lineNumber >= highlightedRange.start_line && lineNumber <= highlightedRange.end_line;
           return <div className={`${styles.codeLine} ${highlighted ? styles.highlighted : ""}`} key={`${index}-${line}`}><span className={styles.lineNumber}>{lineNumber}</span><code>{line || " "}</code></div>;
         })}
       </div>

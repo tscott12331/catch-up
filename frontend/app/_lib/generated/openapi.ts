@@ -110,20 +110,6 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** ChatMessage */
-        ChatMessage: {
-            /** Citations */
-            citations?: components["schemas"]["Citation"][] | null;
-            /** Content */
-            content: string;
-            /** Id */
-            id: string;
-            /**
-             * Role
-             * @enum {string}
-             */
-            role: "user" | "assistant";
-        };
         /** ChatRequest */
         ChatRequest: {
             /**
@@ -141,10 +127,49 @@ export interface components {
         Citation: {
             /** End Line */
             end_line: number;
-            /** File */
-            file: string;
+            /**
+             * Id
+             * Format: uuid
+             * @description A UUID version 4 identifier.
+             */
+            id: string;
+            /**
+             * Passage Id
+             * Format: uuid
+             * @description A UUID version 4 identifier.
+             */
+            passage_id: string;
+            /** Path */
+            path: string;
+            /** Revision */
+            revision: string;
             /** Start Line */
             start_line: number;
+        };
+        /** Conversation */
+        Conversation: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             * @description A UUID version 4 identifier.
+             */
+            id: string;
+            /**
+             * Repository Id
+             * Format: uuid
+             * @description A UUID version 4 identifier.
+             */
+            repository_id: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /** FileResponse */
         FileResponse: {
@@ -158,35 +183,126 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** IndexingError */
+        IndexingError: {
+            /** Code */
+            code: string;
+            /** Details */
+            details: {
+                [key: string]: unknown;
+            } | null;
+            /** Message */
+            message: string;
+            /**
+             * Retriable
+             * @default false
+             */
+            retriable: boolean;
+        };
         /** IndexingJob */
         IndexingJob: {
-            /** Id */
+            /** Completed At */
+            completed_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            error: components["schemas"]["IndexingError"] | null;
+            /**
+             * Id
+             * Format: uuid
+             * @description A UUID version 4 identifier.
+             */
             id: string;
             /** Progress */
             progress: number;
             /**
+             * Repository Id
+             * Format: uuid
+             * @description A UUID version 4 identifier.
+             */
+            repository_id: string;
+            /**
+             * Stage
+             * @enum {string}
+             */
+            stage: "queued" | "cloning" | "discovering" | "parsing" | "indexing" | "finalizing" | "completed" | "failed" | "cancelled";
+            /** Started At */
+            started_at: string | null;
+            /**
              * Status
              * @enum {string}
              */
-            status: "queued" | "indexing" | "completed" | "failed";
+            status: "queued" | "indexing" | "completed" | "failed" | "cancelled";
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
-        /** RepositoryCreateResponse */
-        RepositoryCreateResponse: {
-            job: components["schemas"]["IndexingJob"];
-            repository: components["schemas"]["RepositoryIdentity"];
+        /** Message */
+        Message: {
+            /** Citations */
+            citations: components["schemas"]["Citation"][];
+            /** Completed At */
+            completed_at: string | null;
+            /**
+             * Completion State
+             * @enum {string}
+             */
+            completion_state: "pending" | "streaming" | "completed" | "failed" | "cancelled";
+            /** Content */
+            content: string;
+            /**
+             * Conversation Id
+             * Format: uuid
+             * @description A UUID version 4 identifier.
+             */
+            conversation_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             * @description A UUID version 4 identifier.
+             */
+            id: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "user" | "assistant";
         };
-        /** RepositoryIdentity */
-        RepositoryIdentity: {
+        /** Repository */
+        Repository: {
             /** Default Branch */
             default_branch: string;
-            /** Id */
+            /**
+             * Id
+             * Format: uuid
+             * @description A UUID version 4 identifier.
+             */
             id: string;
+            /** Indexed Revision */
+            indexed_revision: string;
             /** Name */
             name: string;
             /** Owner */
             owner: string;
-            /** Url */
-            url: string;
+            /**
+             * Source Url
+             * Format: uri
+             */
+            source_url: string;
+        };
+        /** RepositoryCreateResponse */
+        RepositoryCreateResponse: {
+            job: components["schemas"]["IndexingJob"];
+            repository: components["schemas"]["Repository"];
         };
         /** RepositoryRequest */
         RepositoryRequest: {
@@ -195,6 +311,36 @@ export interface components {
              * @default
              */
             url: string;
+        };
+        /** SourcePassage */
+        SourcePassage: {
+            /** Content */
+            content: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** End Line */
+            end_line: number;
+            /**
+             * Id
+             * Format: uuid
+             * @description A UUID version 4 identifier.
+             */
+            id: string;
+            /** Path */
+            path: string;
+            /**
+             * Repository Id
+             * Format: uuid
+             * @description A UUID version 4 identifier.
+             */
+            repository_id: string;
+            /** Revision */
+            revision: string;
+            /** Start Line */
+            start_line: number;
         };
         /** TreeNode */
         TreeNode: {
@@ -223,10 +369,13 @@ export interface components {
         };
         /** WorkspaceResponse */
         WorkspaceResponse: {
+            conversation: components["schemas"]["Conversation"];
             job: components["schemas"]["IndexingJob"];
             /** Messages */
-            messages: components["schemas"]["ChatMessage"][];
-            repository: components["schemas"]["RepositoryIdentity"];
+            messages: components["schemas"]["Message"][];
+            /** Passages */
+            passages: components["schemas"]["SourcePassage"][];
+            repository: components["schemas"]["Repository"];
             /** Selected File */
             selected_file: string;
             /** Starter Questions */

@@ -5,7 +5,7 @@ type WorkspaceHeaderProps = {
   repoName: string;
   isIndexing: boolean;
   indexProgress: number;
-  jobStatus: "queued" | "indexing" | "completed" | "failed";
+  jobStatus: "queued" | "indexing" | "completed" | "failed" | "cancelled";
 };
 
 export function WorkspaceHeader({ repoName, isIndexing, indexProgress, jobStatus }: WorkspaceHeaderProps) {
@@ -20,7 +20,7 @@ export function WorkspaceHeader({ repoName, isIndexing, indexProgress, jobStatus
         </div>
         <div className={styles.headerActions}>
           <div className={`${styles.indexStatus} ${isIndexing ? styles.indexing : jobStatus === "failed" ? styles.failed : styles.ready}`}>
-            <span className={styles.statusDot} />{isIndexing ? `Indexing ${indexProgress}%` : jobStatus === "failed" ? "Indexing failed" : "Indexed just now"}
+            <span className={styles.statusDot} />{isIndexing ? `Indexing ${indexProgress}%` : jobStatus === "failed" ? "Indexing failed" : jobStatus === "cancelled" ? "Indexing cancelled" : "Indexed just now"}
           </div>
           <button className={styles.iconButton} aria-label="Settings"><Icon name="settings" size={17} /></button>
         </div>

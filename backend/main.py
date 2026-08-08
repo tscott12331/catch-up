@@ -11,6 +11,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Annotated, Any, Literal
 from urllib.parse import unquote, urlsplit
+from uuid import UUID, uuid4
 
 import uvicorn
 from fastapi import FastAPI, Query, Request
@@ -22,19 +23,14 @@ from pydantic import BaseModel, ConfigDict, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 try:
-    from .fixtures import FILE_CONTENT, STARTER_QUESTIONS, messages_fixture, tree_fixture
+    from .fixtures import DEMO_REPOSITORY_ID, DEMO_REVISION, FILE_CONTENT, STARTER_QUESTIONS, conversation_fixture, messages_fixture, passages_fixture, tree_fixture
+    from .models import Citation, Conversation, IndexingError, IndexingJob, Message, Repository, SourcePassage, utc_now
 except ImportError:  # Allows ``uv run main.py`` from the backend directory.
-    from fixtures import FILE_CONTENT, STARTER_QUESTIONS, messages_fixture, tree_fixture
+    from fixtures import DEMO_REPOSITORY_ID, DEMO_REVISION, FILE_CONTENT, STARTER_QUESTIONS, conversation_fixture, messages_fixture, passages_fixture, tree_fixture
+    from models import Citation, Conversation, IndexingError, IndexingJob, Message, Repository, SourcePassage, utc_now
 
 
-JobStatus = Literal["queued", "indexing", "completed", "failed"]
 TreeNodeType = Literal["file", "folder"]
-
-
-class Citation(BaseModel):
-    file: str
-    start_line: int
-    end_line: int
 
 
 class TreeNode(BaseModel):
@@ -43,38 +39,19 @@ class TreeNode(BaseModel):
     children: list["TreeNode"] | None = None
 
 
-class RepositoryIdentity(BaseModel):
-    id: str
-    owner: str
-    name: str
-    url: str
-    default_branch: str
-
-
-class IndexingJob(BaseModel):
-    id: str
-    status: JobStatus
-    progress: int
-
-
-class ChatMessage(BaseModel):
-    id: str
-    role: Literal["user", "assistant"]
-    content: str
-    citations: list[Citation] | None = None
-
-
 class RepositoryCreateResponse(BaseModel):
-    repository: RepositoryIdentity
+    repository: Repository
     job: IndexingJob
 
 
 class WorkspaceResponse(BaseModel):
-    repository: RepositoryIdentity
+    repository: Repository
+    conversation: Conversation
     tree: list[TreeNode]
     selected_file: str
     starter_questions: list[str]
-    messages: list[ChatMessage]
+    messages: list[Message]
+    passages: list[SourcePassage]
     job: IndexingJob
 
 
@@ -95,7 +72,7 @@ class ErrorResponse(BaseModel):
 
 class MessageStartedEvent(BaseModel):
     type: Literal["message.started"]
-    message_id: str
+    message_id: UUID
 
 
 class MessageDeltaEvent(BaseModel):
@@ -138,9 +115,8 @@ class ChatRequest(BaseModel):
 
 @dataclass
 class JobState:
-    id: str
-    repository_id: str
-    created_at: float
+    job: IndexingJob
+    created_at_monotonic: float
 
 
 app = FastAPI(title="Catch-up backend")
@@ -159,6 +135,7 @@ app.add_middleware(
 
 
 JOBS: dict[str, JobState] = {}
+REPOSITORIES: dict[tuple[str, str], Repository] = {}
 JOB_DURATION_SECONDS = 1.2
 SEGMENT_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 OWNER_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]*$")
@@ -186,22 +163,19 @@ async def http_exception(request: Request, exc: StarletteHTTPException) -> JSONR
     return error_response(exc.status_code, "http_error", str(exc.detail))
 
 
-def repository_id_for(owner: str, name: str) -> str:
-    return f"repo_{owner}_{name}"
-
-
-def job_id_for(owner: str, name: str) -> str:
-    return f"job_{owner}_{name}"
-
-
-def repository_identity(owner: str, name: str, *, url: str | None = None) -> dict[str, str]:
-    return {
-        "id": repository_id_for(owner, name),
-        "owner": owner,
-        "name": name,
-        "url": url or f"https://github.com/{owner}/{name}",
-        "default_branch": "main",
-    }
+def repository_identity(owner: str, name: str, *, url: str | None = None) -> Repository:
+    key = (owner, name)
+    if key not in REPOSITORIES:
+        repository_id = DEMO_REPOSITORY_ID if key == ("acme", "checkout-service") else uuid4()
+        REPOSITORIES[key] = Repository(
+            id=repository_id,
+            source_url=url or f"https://github.com/{owner}/{name}",
+            owner=owner,
+            name=name,
+            default_branch="main",
+            indexed_revision=DEMO_REVISION,
+        )
+    return REPOSITORIES[key]
 
 
 def validate_segment(value: str, *, owner: bool = False) -> str | None:
@@ -250,24 +224,40 @@ def repository_from_route(owner_segment: str, repo_segment: str) -> tuple[str, s
     return owner, name
 
 
-def ensure_job(repository: dict[str, str], *, reset: bool = False) -> JobState:
-    job_id = job_id_for(repository["owner"], repository["name"])
-    if reset or job_id not in JOBS:
-        JOBS[job_id] = JobState(id=job_id, repository_id=repository["id"], created_at=time.monotonic())
-    return JOBS[job_id]
+def ensure_job(repository: Repository, *, reset: bool = False) -> JobState:
+    existing = next((state for state in JOBS.values() if state.job.repository_id == repository.id), None)
+    if reset or existing is None:
+        job = IndexingJob(repository_id=repository.id, status="queued", stage="queued", progress=0)
+        state = JobState(job=job, created_at_monotonic=time.monotonic())
+        JOBS[str(job.id)] = state
+        return state
+    return existing
 
 
-def job_payload(job: JobState) -> dict[str, Any]:
-    elapsed = max(0.0, time.monotonic() - job.created_at)
+def job_payload(state: JobState) -> IndexingJob:
+    elapsed = max(0.0, time.monotonic() - state.created_at_monotonic)
     progress = min(100, int((elapsed / JOB_DURATION_SECONDS) * 100))
     if progress >= 100:
-        status: JobStatus = "completed"
+        status = "completed"
+        stage = "completed"
         progress = 100
     elif progress == 0:
         status = "queued"
+        stage = "queued"
     else:
         status = "indexing"
-    return IndexingJob(id=job.id, status=status, progress=progress).model_dump()
+        stage = "indexing"
+    now = utc_now()
+    return state.job.model_copy(
+        update={
+            "status": status,
+            "stage": stage,
+            "progress": progress,
+            "updated_at": now,
+            "started_at": state.job.created_at if progress else None,
+            "completed_at": now if status == "completed" else None,
+        }
+    )
 
 
 def file_path_from_query(path: str) -> str | None:
@@ -300,8 +290,8 @@ async def create_repository(payload: RepositoryRequest | None = None) -> Reposit
     repository = repository_identity(owner, name, url=payload.url.strip().rstrip("/"))
     job = ensure_job(repository, reset=True)
     return RepositoryCreateResponse(
-        repository=RepositoryIdentity(**repository),
-        job=IndexingJob(**job_payload(job)),
+        repository=repository,
+        job=job_payload(job),
     )
 
 
@@ -314,12 +304,14 @@ async def get_workspace(owner: str, repo: str) -> WorkspaceResponse | JSONRespon
     repository = repository_identity(owner_name, repo_name)
     job = ensure_job(repository)
     return WorkspaceResponse(
-        repository=RepositoryIdentity(**repository),
+        repository=repository,
+        conversation=conversation_fixture(repository.id),
         tree=tree_fixture(),
         selected_file="src/api/checkout.ts",
         starter_questions=list(STARTER_QUESTIONS),
-        messages=messages_fixture(),
-        job=IndexingJob(**job_payload(job)),
+        messages=messages_fixture(repository.id),
+        passages=passages_fixture(repository.id),
+        job=job_payload(job),
     )
 
 
@@ -338,14 +330,14 @@ async def get_job(job_id: str) -> IndexingJob | JSONResponse:
     job = JOBS.get(job_id)
     if not job:
         return error_response(404, "job_not_found", "Indexing job was not found.")
-    return IndexingJob(**job_payload(job))
+    return job_payload(job)
 
 
 async def stream_demo_answer(repository_id: str, question: str) -> AsyncIterator[str]:
     """Yield ordered SSE events; ``__stream_error__`` is a deterministic test hook."""
-    message_id = f"message_{int(time.time() * 1000)}"
+    message_id = uuid4()
     try:
-        yield f"data: {json.dumps({'type': 'message.started', 'message_id': message_id})}\n\n"
+        yield f"data: {json.dumps({'type': 'message.started', 'message_id': str(message_id)})}\n\n"
         await asyncio.sleep(0.04)
         if "__stream_error__" in question:
             raise RuntimeError("The demo stream failed before completion.")
@@ -355,7 +347,12 @@ async def stream_demo_answer(repository_id: str, question: str) -> AsyncIterator
         ):
             yield f"data: {json.dumps({'type': 'message.delta', 'text': text})}\n\n"
             await asyncio.sleep(0.04)
-        yield f"data: {json.dumps({'type': 'message.completed', 'citations': [{'file': 'src/api/checkout.ts', 'start_line': 5, 'end_line': 20}, {'file': 'src/services/payment-service.ts', 'start_line': 1, 'end_line': 13}]})}\n\n"
+        try:
+            message_repository_id = UUID(repository_id)
+        except ValueError:
+            message_repository_id = DEMO_REPOSITORY_ID
+        citations = [citation.model_dump(mode="json") for citation in messages_fixture(message_repository_id)[-1].citations]
+        yield f"data: {json.dumps({'type': 'message.completed', 'citations': citations})}\n\n"
     except asyncio.CancelledError:
         raise
     except Exception as exc:

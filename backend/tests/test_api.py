@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 import json
+from uuid import UUID
 
 import httpx
 import pytest
 
-from main import JOB_DURATION_SECONDS, JOBS, app
+from main import JOB_DURATION_SECONDS, JOBS, REPOSITORIES, app
 
 
 @pytest.fixture(autouse=True)
 def reset_jobs() -> None:
     JOBS.clear()
+    REPOSITORIES.clear()
 
 
 @pytest.fixture
@@ -34,15 +36,20 @@ async def test_creating_a_repository_returns_identity_and_indexing_job(client: h
 
     assert response.status_code == 202
     body = response.json()
-    assert body["repository"] == {
-        "id": "repo_acme_checkout-service",
+    repository = body["repository"]
+    assert UUID(repository["id"]).version == 4
+    assert repository | {"id": None} == {
+        "id": None,
+        "source_url": "https://github.com/acme/checkout-service",
         "owner": "acme",
         "name": "checkout-service",
-        "url": "https://github.com/acme/checkout-service",
         "default_branch": "main",
+        "indexed_revision": "8a8b1b9f95ea2f76e67c11b79f138b5e8044be57",
     }
-    assert body["job"]["id"] == "job_acme_checkout-service"
+    assert UUID(body["job"]["id"]).version == 4
+    assert body["job"]["repository_id"] == repository["id"]
     assert body["job"]["status"] in {"queued", "indexing"}
+    assert body["job"]["stage"] in {"queued", "indexing"}
     assert 0 <= body["job"]["progress"] < 100
 
 
@@ -50,12 +57,17 @@ async def test_creating_a_repository_returns_identity_and_indexing_job(client: h
 async def test_job_progress_reaches_completed(client: httpx.AsyncClient) -> None:
     created = await client.post("/api/repositories", json={"url": "https://github.com/acme/checkout-service"})
     job_id = created.json()["job"]["id"]
-    JOBS[job_id].created_at -= JOB_DURATION_SECONDS
+    JOBS[job_id].created_at_monotonic -= JOB_DURATION_SECONDS
 
     response = await client.get(f"/api/jobs/{job_id}")
 
     assert response.status_code == 200
-    assert response.json() == {"id": job_id, "status": "completed", "progress": 100}
+    body = response.json()
+    assert body["id"] == job_id
+    assert body["status"] == "completed"
+    assert body["stage"] == "completed"
+    assert body["progress"] == 100
+    assert body["completed_at"].endswith("Z")
 
 
 @pytest.mark.anyio
@@ -64,11 +76,14 @@ async def test_workspace_returns_repository_content_and_current_job(client: http
 
     assert response.status_code == 200
     body = response.json()
-    assert body["repository"]["id"] == "repo_acme_checkout-service"
+    assert UUID(body["repository"]["id"]).version == 4
+    assert body["conversation"]["repository_id"] == body["repository"]["id"]
     assert body["selected_file"] == "src/api/checkout.ts"
     assert body["tree"][0]["name"] == "src"
-    assert body["messages"][0]["id"] == "message_welcome"
-    assert body["job"]["id"] == "job_acme_checkout-service"
+    assert UUID(body["messages"][0]["id"]).version == 4
+    assert body["messages"][0]["completion_state"] == "completed"
+    assert body["passages"][0]["revision"] == body["repository"]["indexed_revision"]
+    assert UUID(body["job"]["id"]).version == 4
 
 
 @pytest.mark.anyio
@@ -102,21 +117,21 @@ def sse_events(body: str) -> list[dict[str, object]]:
 
 @pytest.mark.anyio
 async def test_chat_stream_emits_started_delta_and_completed_events(client: httpx.AsyncClient) -> None:
-    response = await client.post("/api/chat/stream", json={"repository_id": "repo_acme_checkout-service", "question": "How does checkout work?"})
+    response = await client.post("/api/chat/stream", json={"repository_id": "11111111-1111-4111-8111-111111111111", "question": "How does checkout work?"})
 
     events = sse_events(response.text)
     assert response.headers["content-type"].startswith("text/event-stream")
     assert [event["type"] for event in events] == ["message.started", "message.delta", "message.delta", "message.completed"]
-    assert isinstance(events[0]["message_id"], str)
-    assert events[-1]["citations"] == [
-        {"file": "src/api/checkout.ts", "start_line": 5, "end_line": 20},
-        {"file": "src/services/payment-service.ts", "start_line": 1, "end_line": 13},
+    assert UUID(events[0]["message_id"]).version == 4
+    assert [(citation["path"], citation["start_line"], citation["end_line"]) for citation in events[-1]["citations"]] == [
+        ("src/api/checkout.ts", 5, 20),
+        ("src/services/payment-service.ts", 1, 13),
     ]
 
 
 @pytest.mark.anyio
 async def test_chat_stream_emits_error_event(client: httpx.AsyncClient) -> None:
-    response = await client.post("/api/chat/stream", json={"repository_id": "repo_acme_checkout-service", "question": "__stream_error__"})
+    response = await client.post("/api/chat/stream", json={"repository_id": "11111111-1111-4111-8111-111111111111", "question": "__stream_error__"})
 
     events = sse_events(response.text)
     assert [event["type"] for event in events] == ["message.started", "message.error"]

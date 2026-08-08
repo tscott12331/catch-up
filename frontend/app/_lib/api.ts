@@ -1,4 +1,4 @@
-import type { Citation, IndexingJob, RepositoryIdentity, WorkspacePayload } from "./types";
+import type { Citation, IndexingJob, RepositoryCreateResponse, WorkspacePayload } from "./types";
 
 const DEFAULT_API_BASE_URL = "http://localhost:8000";
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || DEFAULT_API_BASE_URL).replace(/\/$/, "");
@@ -78,7 +78,7 @@ function encodeSegment(segment: string): string {
   return encodeURIComponent(segment);
 }
 
-export function createRepository(url: string, signal?: AbortSignal): Promise<{ repository: RepositoryIdentity; job: IndexingJob }> {
+export function createRepository(url: string, signal?: AbortSignal): Promise<RepositoryCreateResponse> {
   return requestJson("/api/repositories", {
     method: "POST",
     signal,
