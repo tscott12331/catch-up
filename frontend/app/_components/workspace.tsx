@@ -166,6 +166,7 @@ export function Workspace({ repository: routeRepository }: WorkspaceProps) {
   function selectCitation(citation: Citation) {
     setExpanded((current) => new Set([...current, ...parentFolders(citation.path)]));
     setCitationHighlight(citation);
+    if (citation.path === activeFile) return;
     setPreview({ status: "loading" });
     setActiveFile(citation.path);
   }

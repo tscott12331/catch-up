@@ -47,5 +47,20 @@ bun run test
 bun run contract:check
 ```
 
+## Browser verification
+
+The deterministic Playwright suite starts its own backend in `ENVIRONMENT=test`
+on port 8010 and a frontend on port 3100. It resets the in-memory fixture state
+through a test-only endpoint before every scenario; that endpoint returns 404 in
+development and production. Run it after installing the Chromium browser once:
+
+```bash
+bunx playwright install chromium
+bun run test:e2e
+```
+
+`test:e2e` always starts isolated servers and does not reuse a locally running
+development backend.
+
 After a backend API contract update, regenerate the tracked frontend OpenAPI
 types with `bun run contract:generate`.

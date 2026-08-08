@@ -67,6 +67,18 @@ Establish the frontend/backend boundary and a minimal vertical slice.
 
 **Outcome:** Both applications communicate through an explicit contract, and the project has a stable skeleton for incremental work.
 
+#### Phase 1 completion checklist
+
+- [x] Domain, HTTP error, and streaming-event contracts are generated and checked in.
+- [x] The local launcher, validated configuration, readiness endpoint, and JSON request logging are documented.
+- [x] The frontend connects a demo repository, shows deterministic indexing progress, streams an answer, and opens cited source lines.
+- [x] Conversation reset and recoverable workspace/stream failures are handled in the browser.
+- [x] `uv run --project backend python verify.py` runs backend, contract, frontend, build, and browser verification as one gate.
+
+#### Deferred to Phase 2
+
+- Repository acquisition, safe discovery, revision tracking, parsing, semantic chunking, cancellation, and persistent ingestion records.
+
 ### Phase 2: Repository ingestion
 
 Turn a repository into structured, searchable records.
@@ -172,4 +184,3 @@ These are intentionally deferred so the project can first demonstrate the core c
 The initial project goal is achieved when a developer can point the application at a representative repository, ask a curated set of onboarding questions, receive useful answers whose important claims link to correct source passages, and run the entire workflow locally without a paid service.
 
 The portfolio should also make the engineering quality visible: a reviewer should be able to inspect retrieval inputs and results, understand system boundaries, run automated evaluations, and see how the application behaves when it lacks sufficient evidence.
-

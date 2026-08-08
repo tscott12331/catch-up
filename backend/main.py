@@ -313,6 +313,15 @@ async def ready(request: Request) -> StatusResponse | JSONResponse:
     return StatusResponse(status="ready", service="catch-up-backend")
 
 
+@app.post("/__test/reset", include_in_schema=False, response_model=None, status_code=204)
+async def reset_test_stores(request: Request) -> Response | JSONResponse:
+    """Reset deterministic fixture state for browser tests, never for regular environments."""
+    if settings.environment != "test":
+        return error_response(404, "not_found", "Route not found.")
+    reset_in_memory_stores(request.app)
+    return Response(status_code=204)
+
+
 @app.post("/api/repositories", status_code=202, response_model=RepositoryCreateResponse)
 async def create_repository(request: Request, payload: RepositoryRequest | None = None, stores: StoresDependency = None) -> RepositoryCreateResponse | JSONResponse:
     payload = payload or RepositoryRequest()

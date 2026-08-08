@@ -50,6 +50,13 @@ async def test_readiness_is_independent_of_delivery_phase_and_reports_store_init
 
 
 @pytest.mark.anyio
+async def test_browser_test_reset_route_is_unavailable_outside_the_test_environment(client: httpx.AsyncClient) -> None:
+    response = await client.post("/__test/reset")
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"
+
+
+@pytest.mark.anyio
 async def test_request_logs_are_json_correlated_and_do_not_include_source_or_questions(client: httpx.AsyncClient) -> None:
     output = io.StringIO()
     handler = logging.StreamHandler(output)

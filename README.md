@@ -58,12 +58,15 @@ ID plus safe request/job/message identifiers, never question or source text.
 ## Checks and troubleshooting
 
 ```bash
-uv run --project backend pytest
-uv run --project backend python backend/export_contracts.py --check
-bun run --cwd frontend contract:check
-bun run --cwd frontend lint
-bun run --cwd frontend test
-bun run --cwd frontend build
+uv run --project backend python verify.py
+```
+
+This is the Phase 1 verification gate: it runs backend tests, verifies checked-in
+contracts, runs frontend contract, lint, unit, and build checks, then exercises
+the browser workflows. Install Playwright Chromium once before its first run:
+
+```bash
+bun x --cwd frontend playwright install chromium
 ```
 
 If the browser cannot reach the API, first check `/health`, then ensure
