@@ -2,12 +2,13 @@ import { defineConfig, devices } from "@playwright/test";
 
 const backendUrl = "http://127.0.0.1:8010";
 const frontendUrl = "http://127.0.0.1:3100";
+const externalServers = process.env.CATCH_UP_E2E_EXTERNAL_SERVERS === "1";
 
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
   workers: 1,
-  timeout: 20_000,
+  timeout: 30_000,
   expect: { timeout: 7_000 },
   reporter: "list",
   use: {
@@ -15,9 +16,10 @@ export default defineConfig({
     baseURL: frontendUrl,
     trace: "retain-on-failure",
   },
-  webServer: [
+  webServer: externalServers ? undefined : [
     {
-      command: "node scripts/start-test-backend.mjs",
+      command: "uv run --project backend python backend/run.py",
+      cwd: "..",
       url: `${backendUrl}/ready`,
       timeout: 30_000,
       reuseExistingServer: false,
@@ -27,7 +29,7 @@ export default defineConfig({
         HOST: "127.0.0.1",
         PORT: "8010",
         FRONTEND_ORIGINS: frontendUrl,
-        DEMO_JOB_DURATION_SECONDS: "6",
+        DEMO_JOB_DURATION_SECONDS: "10",
       },
     },
     {

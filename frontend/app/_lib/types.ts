@@ -28,8 +28,6 @@ export type Message = components["schemas"]["Message"];
 
 export type Conversation = components["schemas"]["Conversation"];
 
-export type SourcePassage = components["schemas"]["SourcePassage"];
-
 export type IndexingError = components["schemas"]["IndexingError"];
 
 export type DisplayMessage = Message & {

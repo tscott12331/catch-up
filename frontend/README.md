@@ -47,6 +47,19 @@ bun run test
 bun run contract:check
 ```
 
+## API and generated contracts
+
+`app/_lib/api/transport.ts` owns HTTP transport and error normalization;
+`app/_lib/api/client.ts` owns endpoint calls; and the SSE modules own framing,
+sequence handling, and runtime validation. Chat state transitions are isolated
+in `app/_lib/chat-reducer.ts`.
+
+Do not hand-edit files under `app/_lib/generated`. `openapi.ts` is generated
+from `../contracts/openapi.json`; `sse-events.json` is copied from the backend's
+serialized event schema; and `sse-events.ts` is generated from that JSON Schema.
+The runtime SSE validator consumes the same checked-in schema as the generated
+TypeScript type.
+
 ## Browser verification
 
 The deterministic Playwright suite starts its own backend in `ENVIRONMENT=test`
@@ -55,12 +68,13 @@ through a test-only endpoint before every scenario; that endpoint returns 404 in
 development and production. Run it after installing the Chromium browser once:
 
 ```bash
-bunx playwright install chromium
+bun x playwright install chromium
 bun run test:e2e
 ```
 
 `test:e2e` always starts isolated servers and does not reuse a locally running
 development backend.
 
-After a backend API contract update, regenerate the tracked frontend OpenAPI
-types with `bun run contract:generate`.
+After a backend API or SSE contract update, regenerate all tracked frontend
+contract artifacts with `bun run contract:generate`, then run
+`bun run contract:check`.

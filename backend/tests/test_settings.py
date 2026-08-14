@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from settings import SettingsValidationError, load_settings
+from catch_up.settings import SettingsValidationError, load_settings
 
 
 def test_settings_use_safe_defaults_and_normalize_origins() -> None:

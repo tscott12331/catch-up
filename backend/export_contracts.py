@@ -10,15 +10,15 @@ from typing import Any
 
 from pydantic import TypeAdapter
 
-from main import app
-
-from models.api.chat_sse import ChatSseEvent, Citation, Message, MessageCompletedEvent, MessageDeltaEvent, MessageErrorEvent, MessageStartedEvent
-from models.api.request import ChatRequest, ConversationRequest, RepositoryRequest
-from models.api.response import ErrorDetail, ErrorResponse, FileResponse, RepositoryCreateResponse, StatusResponse, WorkspaceResponse
-from models.chat import Conversation
-from models.jobs import IndexingJob
-from models.repository import IndexingError, Repository, SourcePassage, TreeNode
-from observability import configure_json_logging
+from catch_up.api.contracts.requests import ChatRequest, ConversationRequest, RepositoryRequest
+from catch_up.api.contracts.responses import ErrorDetail, ErrorResponse, FileResponse, RepositoryCreateResponse, StatusResponse, WorkspaceResponse
+from catch_up.api.contracts.sse import ChatSseEvent, Citation, Message, MessageCompletedEvent, MessageDeltaEvent, MessageErrorEvent, MessageStartedEvent
+from catch_up.bootstrap import build_app
+from catch_up.domain.chat import Conversation
+from catch_up.domain.jobs import IndexingJob
+from catch_up.domain.repository import IndexingError, Repository, SourcePassage, TreeNode
+from catch_up.observability import configure_json_logging
+from catch_up.settings import load_settings
 
 
 CONTRACTS_DIR = Path(__file__).resolve().parent.parent / "contracts"
@@ -51,10 +51,11 @@ DOMAIN_MODELS = (
 
 
 def render_contracts() -> dict[Path, str]:
+    app = build_app(load_settings({}), seed=False)
     domain_schemas: dict[str, Any] = {
         model.__name__: model.model_json_schema(ref_template="#/$defs/{model}") for model in DOMAIN_MODELS
     }
-    sse_schema = TypeAdapter(ChatSseEvent).json_schema(ref_template="#/$defs/{model}")
+    sse_schema = TypeAdapter(ChatSseEvent).json_schema(mode="serialization", ref_template="#/$defs/{model}")
     sse_contract = {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "title": "Catch-up chat SSE events",

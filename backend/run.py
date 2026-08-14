@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import logging
 
-from observability import configure_json_logging
-from settings import SettingsValidationError, load_settings
+from catch_up.observability import configure_json_logging
+from catch_up.settings import SettingsValidationError, load_settings
 
 
 def run() -> int:
@@ -15,9 +15,9 @@ def run() -> int:
         configure_json_logging("ERROR")
         logging.getLogger(__name__).error("Backend configuration invalid: %s", error, extra={"event": "configuration_invalid"})
         return 2
-    from main import main
+    from catch_up.bootstrap import main
 
-    main()
+    main(settings)
     return 0
 
 

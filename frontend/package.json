@@ -9,11 +9,13 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test",
-    "contract:generate": "openapi-typescript ../contracts/openapi.json -o app/_lib/generated/openapi.ts",
-    "contract:check": "openapi-typescript ../contracts/openapi.json | bun scripts/check-contract.mjs app/_lib/generated/openapi.ts"
+    "test:e2e": "node scripts/run-e2e.mjs",
+    "contract:generate": "openapi-typescript ../contracts/openapi.json -o app/_lib/generated/openapi.ts && bun scripts/generate-sse-types.mjs",
+    "contract:check": "openapi-typescript ../contracts/openapi.json | bun scripts/check-contract.mjs app/_lib/generated/openapi.ts && bun scripts/generate-sse-types.mjs --check"
   },
   "dependencies": {
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
     "next": "16.2.12",
     "react": "19.2.4",
     "react-dom": "19.2.4"
@@ -31,6 +33,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.12",
     "jsdom": "^30.0.1",
+    "json-schema-to-typescript": "^15.0.4",
     "openapi-typescript": "^7.13.0",
     "tailwindcss": "^4",
     "typescript": "^5",

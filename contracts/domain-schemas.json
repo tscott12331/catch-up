@@ -1497,62 +1497,6 @@
           "title": "Repository",
           "type": "object"
         },
-        "SourcePassage": {
-          "additionalProperties": false,
-          "properties": {
-            "content": {
-              "title": "Content",
-              "type": "string"
-            },
-            "created_at": {
-              "format": "date-time",
-              "title": "Created At",
-              "type": "string"
-            },
-            "end_line": {
-              "minimum": 1,
-              "title": "End Line",
-              "type": "integer"
-            },
-            "id": {
-              "description": "A UUID version 4 identifier.",
-              "format": "uuid",
-              "title": "Id",
-              "type": "string"
-            },
-            "path": {
-              "minLength": 1,
-              "title": "Path",
-              "type": "string"
-            },
-            "repository_id": {
-              "description": "A UUID version 4 identifier.",
-              "format": "uuid",
-              "title": "Repository Id",
-              "type": "string"
-            },
-            "revision": {
-              "minLength": 1,
-              "title": "Revision",
-              "type": "string"
-            },
-            "start_line": {
-              "minimum": 1,
-              "title": "Start Line",
-              "type": "integer"
-            }
-          },
-          "required": [
-            "repository_id",
-            "revision",
-            "path",
-            "start_line",
-            "end_line",
-            "content"
-          ],
-          "title": "SourcePassage",
-          "type": "object"
-        },
         "TreeNode": {
           "properties": {
             "children": {
@@ -1605,13 +1549,6 @@
           "title": "Messages",
           "type": "array"
         },
-        "passages": {
-          "items": {
-            "$ref": "#/$defs/SourcePassage"
-          },
-          "title": "Passages",
-          "type": "array"
-        },
         "repository": {
           "$ref": "#/$defs/Repository"
         },
@@ -1641,7 +1578,6 @@
         "selected_file",
         "starter_questions",
         "messages",
-        "passages",
         "job"
       ],
       "title": "WorkspaceResponse",

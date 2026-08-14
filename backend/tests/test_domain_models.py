@@ -6,10 +6,10 @@ from uuid import UUID, uuid1
 import pytest
 from pydantic import AnyHttpUrl, ValidationError
 
-from fixtures import DEMO_REPOSITORY_ID, DEMO_REVISION, messages_fixture, passages_fixture
-from models.api.chat_sse import Citation
-from models.jobs import IndexingJob
-from models.repository import Repository, SourcePassage
+from catch_up.domain.jobs import IndexingJob
+from catch_up.domain.messages import Citation
+from catch_up.domain.repository import Repository, SourcePassage
+from catch_up.infrastructure.demo.fixtures import DEMO_REPOSITORY_ID, DEMO_REVISION, messages_fixture, passages_fixture
 
 
 def test_domain_models_serialize_uuid4_and_utc_timestamps() -> None:

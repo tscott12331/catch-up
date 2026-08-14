@@ -19,7 +19,7 @@ async function openDemoWorkspace(page: import("@playwright/test").Page) {
 test("connects the demo, exposes progress, and completes indexing", async ({ page }) => {
   await openDemoWorkspace(page);
   await expect(page.getByText(/Indexing \d+%/)).toBeVisible();
-  await expect(page.getByText("Indexed just now")).toBeVisible();
+  await expect(page.getByText("Indexed just now")).toBeVisible({ timeout: 15_000 });
 });
 
 test("streams an answer and focuses its cited source lines", async ({ page }) => {

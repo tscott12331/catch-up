@@ -1,8 +1,8 @@
 # Catch-up
 
 Catch-up is a local-first codebase onboarding demo: a Next.js frontend talks to
-a FastAPI backend that serves deterministic repository, indexing, and streamed
-answer fixtures.
+a modular FastAPI backend that serves deterministic repository content,
+indexing progress, and streamed answers through replaceable demo adapters.
 
 ## Setup and daily workflow
 
@@ -31,8 +31,30 @@ curl http://127.0.0.1:8000/health
 curl http://127.0.0.1:8000/ready
 ```
 
-`/health` confirms the service is alive. `/ready` confirms its in-memory
-runtime store is initialized. Both are phase-independent and return JSON.
+`/health` confirms the service is alive. `/ready` confirms the application
+service container has been constructed. Both are phase-independent and return
+JSON.
+
+## Architecture
+
+The backend lives in `backend/catch_up` and has four dependency boundaries:
+
+- `domain` owns the repository, indexing, conversation, message, citation, and
+  passage models.
+- `application` owns use cases, typed errors, and persistence/content/time
+  ports. It has no FastAPI or demo-fixture dependencies.
+- `infrastructure` implements the transactional in-memory unit of work and the
+  deterministic content, indexing, and answer adapters.
+- `api` owns HTTP/SSE contracts, error mapping, request observability, and the
+  side-effect-free `create_app(settings, services)` factory.
+
+`backend/catch_up/bootstrap.py` is the composition root. It loads no state at
+module import time; the documented `backend/run.py` launcher validates settings,
+builds the service container, seeds the canonical demo, and starts Uvicorn.
+
+The frontend keeps generated OpenAPI and SSE types under
+`frontend/app/_lib/generated`. Its API modules isolate HTTP transport, error
+normalization, SSE framing, and runtime event validation from UI components.
 
 ## Configuration
 
@@ -63,7 +85,9 @@ uv run --project backend python verify.py
 
 This is the Phase 1 verification gate: it runs backend tests, verifies checked-in
 contracts, runs frontend contract, lint, unit, and build checks, then exercises
-the browser workflows. Install Playwright Chromium once before its first run:
+the browser workflows. The gate reports each check, refuses to start browser
+servers on occupied test ports, and confirms those servers have terminated
+before returning. Install Playwright Chromium once before its first run:
 
 ```bash
 bun x --cwd frontend playwright install chromium

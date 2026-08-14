@@ -397,36 +397,6 @@ export interface components {
              */
             url: string;
         };
-        /** SourcePassage */
-        SourcePassage: {
-            /** Content */
-            content: string;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** End Line */
-            end_line: number;
-            /**
-             * Id
-             * Format: uuid
-             * @description A UUID version 4 identifier.
-             */
-            id: string;
-            /** Path */
-            path: string;
-            /**
-             * Repository Id
-             * Format: uuid
-             * @description A UUID version 4 identifier.
-             */
-            repository_id: string;
-            /** Revision */
-            revision: string;
-            /** Start Line */
-            start_line: number;
-        };
         /** StatusResponse */
         StatusResponse: {
             /** Service */
@@ -465,8 +435,6 @@ export interface components {
             job: components["schemas"]["IndexingJob"];
             /** Messages */
             messages: components["schemas"]["Message"][];
-            /** Passages */
-            passages: components["schemas"]["SourcePassage"][];
             repository: components["schemas"]["Repository"];
             /** Selected File */
             selected_file: string;
