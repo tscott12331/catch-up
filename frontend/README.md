@@ -65,15 +65,22 @@ TypeScript type.
 The deterministic Playwright suite starts its own backend in `ENVIRONMENT=test`
 on port 8010 and a frontend on port 3100. It resets the in-memory fixture state
 through a test-only endpoint before every scenario; that endpoint returns 404 in
-development and production. Run it after installing the Chromium browser once:
+development and production. The authoritative entry point is `bun run test:e2e`;
+the custom runner owns the complete backend/frontend startup, Playwright
+execution, and cleanup lifecycle. Run it after installing the Chromium browser
+once:
 
 ```bash
 bun x playwright install chromium
 bun run test:e2e
 ```
 
-`test:e2e` always starts isolated servers and does not reuse a locally running
-development backend.
+It always starts isolated servers and does not reuse a locally running
+development backend. Direct `bun x playwright test` is not a supported entry
+point because Playwright configuration does not start the application servers.
+The Playwright process is limited to 120 seconds by default; set
+`CATCH_UP_E2E_TIMEOUT_MS` to a positive number of milliseconds when a slower
+environment needs a larger bound.
 
 After a backend API or SSE contract update, regenerate all tracked frontend
 contract artifacts with `bun run contract:generate`, then run

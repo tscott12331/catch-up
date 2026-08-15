@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import socket
 import subprocess
 import sys
 import time
@@ -20,30 +19,8 @@ CHECKS = (
     ("frontend lint", ("bun", "run", "--cwd", "frontend", "lint")),
     ("frontend tests", ("bun", "run", "--cwd", "frontend", "test")),
     ("frontend build", ("bun", "run", "--cwd", "frontend", "build")),
+    ("browser tests", ("bun", "run", "--cwd", "frontend", "test:e2e")),
 )
-E2E_CHECK = ("browser tests", ("bun", "run", "--cwd", "frontend", "test:e2e"))
-E2E_PORTS = (8010, 3100)
-PORT_CLOSE_TIMEOUT_SECONDS = 5.0
-
-
-def listening_ports(ports: tuple[int, ...]) -> list[int]:
-    occupied: list[int] = []
-    for port in ports:
-        try:
-            with socket.create_connection(("127.0.0.1", port), timeout=0.2):
-                occupied.append(port)
-        except OSError:
-            pass
-    return occupied
-
-
-def wait_for_ports_to_close(ports: tuple[int, ...]) -> list[int]:
-    deadline = time.monotonic() + PORT_CLOSE_TIMEOUT_SECONDS
-    while occupied := listening_ports(ports):
-        if time.monotonic() >= deadline:
-            return occupied
-        time.sleep(0.1)
-    return []
 
 
 def run_check(name: str, command: tuple[str, ...]) -> int:
@@ -64,32 +41,7 @@ def main() -> int:
     for name, command in CHECKS:
         if exit_code := run_check(name, command):
             return exit_code
-
-    occupied = listening_ports(E2E_PORTS)
-    if occupied:
-        joined = ", ".join(str(port) for port in occupied)
-        print(
-            f"[verify] browser tests cannot start because localhost port(s) {joined} are already in use.",
-            file=sys.stderr,
-        )
-        return 2
-
-    name, command = E2E_CHECK
-    exit_code = 2
-    try:
-        exit_code = run_check(name, command)
-    finally:
-        occupied = wait_for_ports_to_close(E2E_PORTS)
-        if occupied:
-            joined = ", ".join(str(port) for port in occupied)
-            print(
-                f"[verify] browser test server cleanup failed; localhost port(s) {joined} still accept connections.",
-                file=sys.stderr,
-            )
-            exit_code = exit_code or 2
-        else:
-            print("[verify] browser test server cleanup confirmed", flush=True)
-    return exit_code
+    return 0
 
 
 if __name__ == "__main__":
