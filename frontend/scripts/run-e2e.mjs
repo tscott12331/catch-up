@@ -20,7 +20,7 @@ const servers = [
     port: 8010,
     url: "http://127.0.0.1:8010/ready",
     timeoutMs: 30_000,
-    stdio: "ignore",
+    stdio: "inherit",
     env: {
       ENVIRONMENT: "test",
       HOST: "127.0.0.1",
@@ -37,7 +37,7 @@ const servers = [
     port: 3100,
     url: "http://127.0.0.1:3100",
     timeoutMs: 45_000,
-    stdio: "ignore",
+    stdio: "inherit",
     env: {
       NEXT_PUBLIC_API_BASE_URL: "http://127.0.0.1:8010",
       NEXT_DIST_DIR: ".next-e2e",
@@ -46,7 +46,24 @@ const servers = [
 ];
 
 const delay = (milliseconds) => new Promise((resolveDelay) => setTimeout(resolveDelay, milliseconds));
+const playwrightTimeoutMs = Number(process.env.CATCH_UP_E2E_TIMEOUT_MS ?? 120_000);
+const children = [];
 let interrupted = false;
+let requestedExitCode = null;
+let cleanupPromise = null;
+
+if (!Number.isFinite(playwrightTimeoutMs) || playwrightTimeoutMs <= 0) {
+  throw new Error("CATCH_UP_E2E_TIMEOUT_MS must be a positive number.");
+}
+
+const processSnapshotScript = `
+$ErrorActionPreference = "SilentlyContinue"
+Get-Process | ForEach-Object {
+  $parentId = $null
+  try { $parentId = $_.Parent.Id } catch {}
+  [PSCustomObject]@{ Id = $_.Id; ParentId = $parentId }
+} | ConvertTo-Json -Compress
+`;
 
 function isPortListening(port) {
   return new Promise((resolveListening) => {
@@ -62,11 +79,71 @@ function isPortListening(port) {
   });
 }
 
+function commandOutput(command, args) {
+  return new Promise((resolveOutput) => {
+    const child = spawn(command, args, { shell: false, windowsHide: true, stdio: ["ignore", "pipe", "ignore"] });
+    let output = "";
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => { output += chunk; });
+    child.once("error", () => resolveOutput(""));
+    child.once("exit", () => resolveOutput(output));
+  });
+}
+
+async function captureOwnedDescendants(child) {
+  if (process.platform !== "win32" || !child.pid || hasExited(child)) return [];
+  const output = await commandOutput("pwsh.exe", [
+    "-NoProfile",
+    "-NonInteractive",
+    "-Command",
+    processSnapshotScript,
+  ]);
+  if (!output) return [];
+  let snapshot;
+  try {
+    snapshot = JSON.parse(output);
+  } catch {
+    return [];
+  }
+  const rows = Array.isArray(snapshot) ? snapshot : [snapshot];
+  const depths = new Map([[child.pid, 0]]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const row of rows) {
+      const pid = Number(row.Id);
+      const parentPid = Number(row.ParentId);
+      if (pid && depths.has(parentPid) && !depths.has(pid)) {
+        depths.set(pid, depths.get(parentPid) + 1);
+        changed = true;
+      }
+    }
+  }
+  return [...depths.entries()]
+    .filter(([pid]) => pid !== child.pid)
+    .sort((left, right) => right[1] - left[1])
+    .map(([pid]) => pid);
+}
+
+async function isHttpReady(url) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 500);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function startProcess(definition) {
   const child = spawn(definition.command, definition.args, {
     cwd: definition.cwd,
     env: { ...process.env, ...definition.env },
     shell: false,
+    detached: process.platform !== "win32",
     stdio: definition.stdio ?? "inherit",
     windowsHide: true,
   });
@@ -79,91 +156,88 @@ function startProcess(definition) {
 }
 
 async function waitForServer(child) {
-  const { name, port, timeoutMs } = child.definition;
+  const { name, url, timeoutMs } = child.definition;
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (interrupted) throw new Error("E2E startup was interrupted.");
     if (child.startError) throw new Error(`${name} could not start: ${child.startError.message}`);
-    if (await isPortListening(port)) {
-      console.log(`[e2e] ${name} ready on port ${port}`);
+    if (await isHttpReady(url)) {
+      console.log(`[e2e] ${name} ready at ${url}`);
       return;
     }
-    if (child.exitCode !== null) throw new Error(`${name} exited before becoming ready (code ${child.exitCode}).`);
+    if (child.exitCode !== null || child.signalCode !== null) {
+      throw new Error(`${name} exited before becoming ready (code ${child.exitCode ?? child.signalCode}).`);
+    }
     await delay(100);
   }
-  throw new Error(`${name} did not become ready within ${timeoutMs}ms.`);
+  throw new Error(`${name} did not become ready at ${url} within ${timeoutMs}ms.`);
 }
 
-function waitForExit(child, timeoutMs) {
-  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve(true);
+function hasExited(child) {
+  return child.exitCode !== null || child.signalCode !== null;
+}
+
+function waitForExit(child, timeoutMs = null) {
+  if (hasExited(child)) return Promise.resolve(true);
   return new Promise((resolveExit) => {
-    const timer = setTimeout(() => {
-      child.off("exit", onExit);
-      resolveExit(false);
-    }, timeoutMs);
-    const onExit = () => {
+    let timer;
+    const finish = (exited) => {
       clearTimeout(timer);
-      resolveExit(true);
+      child.off("exit", onExit);
+      child.off("error", onError);
+      resolveExit(exited);
     };
+    const onExit = () => finish(true);
+    const onError = () => finish(true);
     child.once("exit", onExit);
-    if (child.exitCode !== null || child.signalCode !== null) onExit();
+    child.once("error", onError);
+    if (timeoutMs !== null) timer = setTimeout(() => finish(false), timeoutMs);
+    if (hasExited(child)) finish(true);
   });
 }
 
+function sendUnixSignal(child, signal) {
+  try {
+    process.kill(-child.pid, signal);
+  } catch {
+    try {
+      child.kill(signal);
+    } catch {
+      // The process may have exited between the checks and the signal.
+    }
+  }
+}
+
+function terminateOwnedPid(pid) {
+  try {
+    process.kill(pid, "SIGKILL");
+  } catch {
+    // The process may have exited between the snapshot and the cleanup pass.
+  }
+}
+
 async function terminateTree(child) {
-  if (!child || child.exitCode !== null || child.signalCode !== null) return;
+  if (!child || !child.pid || child.treeTerminationStarted) return;
+  child.treeTerminationStarted = true;
   if (process.platform === "win32") {
-    const taskkill = spawn("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], {
-      shell: false,
-      stdio: "ignore",
-      windowsHide: true,
-    });
-    if (!(await waitForExit(taskkill, 5_000))) taskkill.kill();
+    if (hasExited(child)) return;
+    const ownedDescendants = await captureOwnedDescendants(child);
+    if (hasExited(child)) return;
+    for (const pid of ownedDescendants) terminateOwnedPid(pid);
+    try {
+      child.kill("SIGKILL");
+    } catch {
+      // The process may have exited between the snapshot and the signal.
+    }
   } else {
-    child.kill("SIGTERM");
-    if (!(await waitForExit(child, 5_000))) child.kill("SIGKILL");
+    sendUnixSignal(child, "SIGTERM");
+    if (!(await waitForExit(child, 5_000))) sendUnixSignal(child, "SIGKILL");
   }
   await waitForExit(child, 2_000);
 }
 
-function commandOutput(command, args) {
-  return new Promise((resolveOutput) => {
-    const child = spawn(command, args, { shell: false, windowsHide: true, stdio: ["ignore", "pipe", "ignore"] });
-    let output = "";
-    child.stdout.setEncoding("utf8");
-    child.stdout.on("data", (chunk) => { output += chunk; });
-    child.once("error", () => resolveOutput(""));
-    child.once("exit", () => resolveOutput(output));
-  });
-}
-
-async function terminateListeningServers() {
-  if (process.platform !== "win32") return;
-  const netstat = await commandOutput("netstat.exe", ["-ano", "-p", "tcp"]);
-  const ownedPids = new Set();
-  for (const server of servers) {
-    const pattern = new RegExp(`^\\s*TCP\\s+127\\.0\\.0\\.1:${server.port}\\s+\\S+\\s+LISTENING\\s+(\\d+)\\s*$`, "mi");
-    const match = netstat.match(pattern);
-    if (match) ownedPids.add(match[1]);
-  }
-  for (const pid of ownedPids) {
-    try {
-      process.kill(Number(pid));
-    } catch {
-      // Fall through to the process-tree fallback below.
-    }
-    await delay(100);
-    const taskkill = spawn("taskkill.exe", ["/PID", pid, "/T", "/F"], {
-      shell: false,
-      stdio: "ignore",
-      windowsHide: true,
-    });
-    if (!(await waitForExit(taskkill, 5_000))) taskkill.kill();
-  }
-}
-
 async function waitForPortsToClose() {
-  const deadline = Date.now() + 15_000;
+  const deadline = Date.now() + 30_000;
   let occupied = [];
   do {
     occupied = [];
@@ -182,8 +256,28 @@ function runPlaywright() {
     command: process.execPath,
     args: [playwrightCli, "test", "--reporter=list", ...process.argv.slice(2)],
     cwd: frontendDirectory,
-    env: { CATCH_UP_E2E_EXTERNAL_SERVERS: "1" },
   });
+}
+
+async function cleanupOwnedProcesses() {
+  await Promise.all([...children].reverse().map(terminateTree));
+  const occupiedAfter = await waitForPortsToClose();
+  if (occupiedAfter.length) {
+    console.error(`[e2e] server cleanup failed; port(s) still in use: ${occupiedAfter.join(", ")}`);
+    return false;
+  }
+  console.log("[e2e] server cleanup confirmed");
+  return true;
+}
+
+function beginCleanup() {
+  if (!cleanupPromise) {
+    cleanupPromise = cleanupOwnedProcesses().catch((error) => {
+      console.error(`[e2e] server cleanup failed: ${error instanceof Error ? error.message : String(error)}`);
+      return false;
+    });
+  }
+  return cleanupPromise;
 }
 
 async function main() {
@@ -195,41 +289,37 @@ async function main() {
     console.error(`[e2e] required port(s) already in use: ${occupiedBefore.join(", ")}`);
     return 2;
   }
+  if (interrupted) return requestedExitCode ?? 1;
 
-  const children = [];
   let exitCode = 1;
   try {
     for (const definition of servers) children.push(startProcess(definition));
     for (const child of children) await waitForServer(child);
     if (interrupted) {
-      exitCode = process.exitCode ?? 1;
+      exitCode = requestedExitCode ?? 1;
     } else {
       const playwright = runPlaywright();
       children.push(playwright);
-      if (!(await waitForExit(playwright, 120_000))) throw new Error("Playwright did not exit within 120000ms.");
+      if (!(await waitForExit(playwright, playwrightTimeoutMs))) {
+        throw new Error(`Playwright did not exit within ${playwrightTimeoutMs}ms.`);
+      }
       exitCode = playwright.exitCode ?? 1;
     }
   } catch (error) {
     console.error(`[e2e] ${error instanceof Error ? error.message : String(error)}`);
   } finally {
-    await Promise.all(children.toReversed().map(terminateTree));
-    await terminateListeningServers();
-    const occupiedAfter = await waitForPortsToClose();
-    if (occupiedAfter.length) {
-      console.error(`[e2e] server cleanup failed; port(s) still in use: ${occupiedAfter.join(", ")}`);
-      exitCode = exitCode || 2;
-    } else {
-      console.log("[e2e] server cleanup confirmed");
-    }
+    const cleanupSucceeded = await beginCleanup();
+    if (!cleanupSucceeded && exitCode === 0) exitCode = 2;
   }
-  return exitCode;
+  return requestedExitCode ?? exitCode;
 }
 
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.once(signal, () => {
     if (interrupted) return;
     interrupted = true;
-    process.exitCode = signal === "SIGINT" ? 130 : 143;
+    requestedExitCode = signal === "SIGINT" ? 130 : 143;
+    void beginCleanup();
   });
 }
 
