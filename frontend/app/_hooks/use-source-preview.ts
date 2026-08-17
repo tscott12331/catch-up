@@ -30,37 +30,39 @@ export function useSourcePreview(
   const [activeFile, setActiveFile] = useState(initialPath);
   const [preview, setPreview] = useState<PreviewState>(initialPath ? { status: "loading" } : { status: "idle" });
   const [highlightedCitation, setHighlightedCitation] = useState<Citation | null>(null);
-  const generation = useRef(0);
+  const scopeKey = `${repository.owner}/${repository.name}\0${initialPath}`;
+  const [stateScopeKey, setStateScopeKey] = useState(scopeKey);
+  const requestController = useRef<AbortController | null>(null);
+
+  if (stateScopeKey !== scopeKey) {
+    setStateScopeKey(scopeKey);
+    setActiveFile(initialPath);
+    setHighlightedCitation(null);
+    setPreview(initialPath ? { status: "loading" } : { status: "idle" });
+  }
 
   useEffect(() => {
-    const resetGeneration = ++generation.current;
-    queueMicrotask(() => {
-      if (generation.current === resetGeneration) {
-        setActiveFile(initialPath);
-        setHighlightedCitation(null);
-        setPreview(initialPath ? { status: "loading" } : { status: "idle" });
-      }
-    });
-  }, [initialPath, repository.name, repository.owner]);
-
-  useEffect(() => {
-    const requestGeneration = ++generation.current;
+    requestController.current?.abort();
     if (!activeFile) return;
 
     const controller = new AbortController();
+    requestController.current = controller;
+
     void client.getFile(repository.owner, repository.name, activeFile, controller.signal)
       .then((file) => {
-        if (!controller.signal.aborted && generation.current === requestGeneration) setPreview({ status: "ready", content: file.content });
+        if (!controller.signal.aborted) {
+          setPreview({ status: "ready", content: file.content });
+        }
       })
       .catch((requestError: unknown) => {
-        if (!controller.signal.aborted && generation.current === requestGeneration && !isAbortError(requestError)) {
+        if (!controller.signal.aborted && !isAbortError(requestError)) {
           setPreview({ status: "unavailable", message: requestError instanceof Error ? requestError.message : "Source content is unavailable." });
         }
       });
 
     return () => {
       controller.abort();
-      if (generation.current === requestGeneration) generation.current += 1;
+      if (requestController.current === controller) requestController.current = null;
     };
   }, [activeFile, client, repository.name, repository.owner]);
 
@@ -83,7 +85,7 @@ export function useSourcePreview(
   }
 
   function closePreview() {
-    generation.current += 1;
+    requestController.current?.abort();
     setHighlightedCitation(null);
     setActiveFile("");
     setPreview({ status: "idle" });

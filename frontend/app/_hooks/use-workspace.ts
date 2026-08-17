@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { ApiClient } from "../_lib/api";
 import { isAbortError } from "../_lib/api/errors";
 import type { RepositoryRoute } from "../_lib/repository";
@@ -22,37 +22,41 @@ export function useWorkspace(client: ApiClient, repository: RepositoryRoute): Wo
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
-  const generation = useRef(0);
+  const repositoryKey = `${repository.owner}/${repository.name}`;
+  const [stateRepositoryKey, setStateRepositoryKey] = useState(repositoryKey);
 
-  const reload = useCallback(() => setReloadKey((current) => current + 1), []);
+  if (stateRepositoryKey !== repositoryKey) {
+    setStateRepositoryKey(repositoryKey);
+    setWorkspace(null);
+    setIsLoading(true);
+    setError("");
+  }
+
+  const reload = useCallback(() => {
+    setWorkspace(null);
+    setIsLoading(true);
+    setError("");
+    setReloadKey((current) => current + 1);
+  }, []);
 
   useEffect(() => {
-    const requestGeneration = ++generation.current;
     const controller = new AbortController();
-    queueMicrotask(() => {
-      if (!controller.signal.aborted && generation.current === requestGeneration) {
-        setWorkspace(null);
-        setIsLoading(true);
-        setError("");
-      }
-    });
 
     void client.getWorkspace(repository.owner, repository.name, controller.signal)
       .then((payload) => {
-        if (!controller.signal.aborted && generation.current === requestGeneration) setWorkspace(payload);
+        if (!controller.signal.aborted) setWorkspace(payload);
       })
       .catch((requestError: unknown) => {
-        if (!controller.signal.aborted && generation.current === requestGeneration && !isAbortError(requestError)) {
+        if (!controller.signal.aborted && !isAbortError(requestError)) {
           setError(messageFrom(requestError));
         }
       })
       .finally(() => {
-        if (!controller.signal.aborted && generation.current === requestGeneration) setIsLoading(false);
+        if (!controller.signal.aborted) setIsLoading(false);
       });
 
     return () => {
       controller.abort();
-      if (generation.current === requestGeneration) generation.current += 1;
     };
   }, [client, reloadKey, repository.name, repository.owner]);
 

@@ -11,5 +11,5 @@ export default async function RepositoryPage({
   const repository = repositoryFromRouteSegments(owner, repo);
   if (!repository) notFound();
 
-  return <Workspace repository={repository} />;
+  return <Workspace key={`${repository.owner}/${repository.name}`} repository={repository} />;
 }

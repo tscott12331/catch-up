@@ -20,6 +20,35 @@ const citation: Citation = {
 };
 
 describe("useSourcePreview", () => {
+  it("loads an initial path that arrives after the workspace", async () => {
+    const getFile = vi.fn().mockResolvedValue({ path: "README.md", content: "readme" });
+    const client = { getFile } as unknown as ApiClient;
+    const { result, rerender } = renderHook(
+      ({ initialPath }) => useSourcePreview(client, { owner: "acme", name: "checkout" }, initialPath),
+      { initialProps: { initialPath: "" } },
+    );
+
+    rerender({ initialPath: "README.md" });
+
+    await waitFor(() => expect(result.current.preview).toEqual({ status: "ready", content: "readme" }));
+    expect(result.current.activeFile).toBe("README.md");
+    expect(getFile).toHaveBeenCalledWith("acme", "checkout", "README.md", expect.any(AbortSignal));
+  });
+
+  it("aborts the file request when the hook unmounts", () => {
+    let signal: AbortSignal | undefined;
+    const getFile = vi.fn((_owner: string, _repo: string, _path: string, requestSignal?: AbortSignal) => {
+      signal = requestSignal;
+      return new Promise<FilePayload>(() => {});
+    });
+    const client = { getFile } as unknown as ApiClient;
+    const { unmount } = renderHook(() => useSourcePreview(client, { owner: "acme", name: "checkout" }, "a.ts"));
+
+    unmount();
+
+    expect(signal?.aborted).toBe(true);
+  });
+
   it("prevents a slower file response from replacing the current selection", async () => {
     const first = deferred<FilePayload>();
     const second = deferred<FilePayload>();
