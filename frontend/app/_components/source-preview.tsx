@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Icon } from "./icon";
 import type { Citation } from "../_lib/types";
-import styles from "./workspace.module.css";
 
 type SourcePreviewProps = {
   activeFile: string;
@@ -28,19 +27,19 @@ export function SourcePreview({ activeFile, previewLines, status, message, highl
   }, [range, status]);
 
   return (
-    <div className={styles.sourcePreview}>
-      <div className={styles.sourceTitle}><span><Icon name="file" size={14} /> {activeFile || "Source preview"}</span><button aria-label="Close preview" onClick={onClose} disabled={!activeFile}><Icon name="x" size={15} /></button></div>
-      <div className={styles.codeWindow}>
-        {status === "loading" && <div className={styles.previewState}>Loading source…</div>}
-        {status === "unavailable" && <div className={styles.previewState}>{message || "Source content is unavailable."}</div>}
-        {status === "idle" && <div className={styles.previewState}>Select a source file to preview its contents.</div>}
+    <div className="mt-[21px] overflow-hidden rounded-[7px] border border-tree-line bg-white">
+      <div className="flex items-center justify-between border-b border-source-line px-[11px] py-2.5 text-[10px] text-source-copy"><span className="flex items-center gap-1.5 overflow-hidden text-ellipsis whitespace-nowrap"><Icon name="file" size={14} /> {activeFile || "Source preview"}</span><button className="border-0 bg-transparent text-message-muted" aria-label="Close preview" onClick={onClose} disabled={!activeFile}><Icon name="x" size={15} /></button></div>
+      <div className="overflow-auto bg-panel py-2.5 font-mono text-[9px] leading-[1.9]">
+        {status === "loading" && <div className="px-3 py-[18px] font-[inherit] text-[10px] leading-normal text-preview-state">Loading source…</div>}
+        {status === "unavailable" && <div className="px-3 py-[18px] font-[inherit] text-[10px] leading-normal text-preview-state">{message || "Source content is unavailable."}</div>}
+        {status === "idle" && <div className="px-3 py-[18px] font-[inherit] text-[10px] leading-normal text-preview-state">Select a source file to preview its contents.</div>}
         {status === "ready" && previewLines.map((line, index) => {
           const lineNumber = index + 1;
           const highlighted = range !== null && lineNumber >= range.start && lineNumber <= range.end;
-          return <div className={`${styles.codeLine} ${highlighted ? styles.highlighted : ""}`} data-line-number={lineNumber} key={`${index}-${line}`} ref={(element) => {
+          return <div className={`flex min-w-max pr-4 text-code-copy ${highlighted ? "highlighted bg-code-highlight" : ""}`} data-line-number={lineNumber} key={`${index}-${line}`} ref={(element) => {
             if (element) lineRefs.current.set(lineNumber, element);
             else lineRefs.current.delete(lineNumber);
-          }}><span className={styles.lineNumber}>{lineNumber}</span><code>{line || " "}</code></div>;
+          }}><span className="w-8 pr-[9px] text-right text-line-number select-none">{lineNumber}</span><code className="whitespace-pre">{line || " "}</code></div>;
         })}
       </div>
     </div>

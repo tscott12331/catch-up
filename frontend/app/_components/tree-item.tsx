@@ -1,6 +1,5 @@
 import { Icon } from "./icon";
 import type { TreeNode } from "../_lib/types";
-import styles from "./workspace.module.css";
 
 type TreeItemProps = {
   node: TreeNode;
@@ -17,12 +16,12 @@ export function TreeItem({ node, path, expanded, onToggle, activeFile, onSelect 
 
   return (
     <div>
-      <button className={`${styles.treeRow} ${isActive ? styles.treeRowActive : ""}`} onClick={() => (node.type === "folder" ? onToggle(path) : onSelect(path))}>
-        {node.type === "folder" ? <Icon name={isOpen ? "chevron-down" : "chevron-right"} size={13} /> : <span className={styles.treeSpacer} />}
+      <button className={`flex w-full items-center gap-[7px] rounded-sm border-0 bg-transparent px-[7px] py-1.5 text-left text-[11px] [&>svg]:text-tree-icon ${isActive ? "bg-tree-active-bg font-bold text-green-ink [&>svg]:text-tree-active-icon" : "text-tree-row hover:bg-tree-hover-bg hover:text-tree-hover"}`} onClick={() => (node.type === "folder" ? onToggle(path) : onSelect(path))}>
+        {node.type === "folder" ? <Icon name={isOpen ? "chevron-down" : "chevron-right"} size={13} /> : <span className="inline-block w-[13px]" />}
         <Icon name={node.type === "folder" ? "folder" : "file"} size={15} />
         <span>{node.name}</span>
       </button>
-      {node.type === "folder" && isOpen && <div className={styles.treeChildren}>
+      {node.type === "folder" && isOpen && <div className="pl-[17px]">
         {node.children?.map((child) => <TreeItem key={`${path}/${child.name}`} node={child} path={`${path}/${child.name}`} expanded={expanded} onToggle={onToggle} activeFile={activeFile} onSelect={onSelect} />)}
       </div>}
     </div>

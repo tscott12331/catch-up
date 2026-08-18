@@ -1,51 +1,129 @@
 @import "tailwindcss";
 
-:root {
-  --ink: #20252b;
-  --muted: #7b838b;
-  --faint: #a7adb2;
-  --line: #e5e7e8;
-  --paper: #fbfbfa;
-  --warm: #f3f1eb;
-  --green: #4e7e69;
-  --green-soft: #e7f0eb;
-  --orange: #c97843;
+@theme {
+  --font-serif: Georgia, serif;
+  --font-mono: Consolas, "SFMono-Regular", monospace;
+  --color-ink: #20252b;
+  --color-copy: #66716a;
+  --color-copy-strong: #434e47;
+  --color-copy-soft: #6e7971;
+  --color-muted: #7b838b;
+  --color-faint: #a7adb2;
+  --color-line: #e5e7e8;
+  --color-paper: #fbfbfa;
+  --color-canvas: #f8f9f8;
+  --color-panel: #fbfcfb;
+  --color-sidebar: #f1f3f1;
+  --color-explorer: #f5f7f5;
+  --color-green: #4e7e69;
+  --color-green-hover: #3d6955;
+  --color-green-ink: #3d6d54;
+  --color-green-strong: #315d49;
+  --color-green-soft: #e7f0eb;
+  --color-orange: #c97843;
+  --color-danger: #b85b50;
+  --color-danger-ink: #9a6258;
+  --color-danger-soft: #fffaf8;
+  --color-danger-line: #eadfda;
+  --color-pattern: #d5d8d5;
+  --color-landing-copy: #6e7676;
+  --color-label: #676e70;
+  --color-input-icon: #67736e;
+  --color-input-line: #d9ddda;
+  --color-input-focus: #88ab98;
+  --color-placeholder: #aeb4b1;
+  --color-hint: #9ba29f;
+  --color-demo: #707a75;
+  --color-footer: #a2a8a5;
+  --color-action-line: #d2dfd5;
+  --color-action-bg: #f2f8f4;
+  --color-switcher-line: #dce1dd;
+  --color-avatar-bg: #d8e5de;
+  --color-avatar-ink: #3f6d58;
+  --color-subtle-copy: #8e9791;
+  --color-icon-muted: #959e99;
+  --color-nav-label: #a4aaa6;
+  --color-nav: #778079;
+  --color-nav-hover-bg: #e7ebe8;
+  --color-nav-active-bg: #dfeae4;
+  --color-local: #9ba39e;
+  --color-header-copy: #525b55;
+  --color-header-muted: #adb3af;
+  --color-status: #858e88;
+  --color-icon: #909993;
+  --color-progress: #e5ebe7;
+  --color-section: #a1a8a3;
+  --color-button-copy: #68726b;
+  --color-button-line: #dfe3e0;
+  --color-interactive-line: #a9c2b4;
+  --color-chip-copy: #7f8982;
+  --color-chip-line: #e2e6e3;
+  --color-chip-hover: #f6faf7;
+  --color-avatar-copy: #637069;
+  --color-avatar-soft: #e8ece9;
+  --color-message-meta: #3c4740;
+  --color-message-muted: #a0a8a2;
+  --color-error-copy: #a05e54;
+  --color-citation-label: #a3aaa5;
+  --color-citation-line: #dbe5de;
+  --color-citation-copy: #4b735e;
+  --color-citation-hover: #e7f1ea;
+  --color-citation-meta: #94a89d;
+  --color-thinking: #84a494;
+  --color-composer-line: #dce2de;
+  --color-composer-focus: #9bb7a6;
+  --color-composer-copy: #3b463e;
+  --color-composer-placeholder: #acb4ae;
+  --color-composer-meta: #a2aaa4;
+  --color-search-line: #e0e5e1;
+  --color-search-icon: #a3aca5;
+  --color-search-placeholder: #abb3ad;
+  --color-tree-line: #e1e5e2;
+  --color-tree-copy: #6d7870;
+  --color-tree-label: #9ba49e;
+  --color-tree-row: #6c766e;
+  --color-tree-hover: #3d5e4b;
+  --color-tree-hover-bg: #e9efeb;
+  --color-tree-active-bg: #e2ede6;
+  --color-tree-icon: #91a197;
+  --color-tree-active-icon: #5f8a70;
+  --color-source-copy: #59665d;
+  --color-source-line: #edf0ee;
+  --color-code-copy: #67746c;
+  --color-code-highlight: #f0f6f1;
+  --color-line-number: #b6beb8;
+  --color-preview-state: #9aa49d;
+  --shadow-landing-input: 0 8px 25px rgb(45 61 54 / 7%);
+  --shadow-state-card: 0 15px 40px rgb(55 74 63 / 6%);
+  --shadow-composer: 0 5px 18px rgb(55 74 63 / 5%);
+  --animate-status-pulse: status-pulse 1.5s infinite;
+  --animate-thinking-bounce: thinking-bounce 1s infinite;
 }
 
-* {
-  box-sizing: border-box;
+@keyframes status-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .35; }
 }
 
-html,
-body {
-  min-height: 100%;
+@keyframes thinking-bounce {
+  0%, 60%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-3px); }
 }
 
-body {
-  margin: 0;
-  background: var(--paper);
-  color: var(--ink);
-  font-family: Arial, Helvetica, sans-serif;
-}
+@layer base {
+  html,
+  body {
+    min-height: 100%;
+  }
 
-button,
-input,
-textarea {
-  font: inherit;
-}
+  body {
+    margin: 0;
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: Arial, Helvetica, sans-serif;
+  }
 
-button {
-  cursor: pointer;
-}
-
-.scroller-y {
-    overflow-y: auto;
-}
-
-.scroller-x {
-    overflow-x: auto;
-}
-
-.scroller-x, .scroller-y {
-    scrollbar-width: thin;
+  button {
+    cursor: pointer;
+  }
 }
