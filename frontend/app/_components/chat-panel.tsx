@@ -32,7 +32,7 @@ export function ChatPanel({ messages, suggestions, input, isThinking, onInputCha
       <div className={styles.suggestionRow}>
         {suggestions.map((suggestion) => <button key={suggestion} onClick={() => onInputChange(suggestion)}>{suggestion}</button>)}
       </div>
-      <div className={styles.messages} aria-live="polite">
+      <div className={`${styles.messages} scroller-y`} aria-live="polite">
         {messages.map((message) => (
           <article className={`${styles.message} ${styles[message.role]}`} key={message.id}>
             <div className={`${styles.messageAvatar} ${styles[message.role]}`}>

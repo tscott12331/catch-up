@@ -36,7 +36,7 @@ export function RepositoryExplorer({ repoName, visibleTree, explorerFilter, expa
   }
 
   return (
-    <aside className={styles.explorerPanel} id="explorer">
+    <aside className={`${styles.explorerPanel} scroller-y`} id="explorer">
       <div className={styles.explorerHeading}><div><p className={styles.sectionKicker}>Source</p><h2>Repository explorer</h2></div><div className={styles.copyAction}><button className={styles.iconButton} aria-label="Copy active file contents" disabled={!canCopy} onClick={() => void copyActiveFile()}><Icon name="copy" size={16} /></button><span className={styles.copyFeedback} role="status">{copyFeedback?.path === activeFile ? copyFeedback.message : ""}</span></div></div>
       <div className={styles.explorerSearch}><Icon name="search" size={15} /><input value={explorerFilter} onChange={(event) => onFilterChange(event.target.value)} placeholder="Filter files" /></div>
       <div className={styles.treeRoot}><span className={styles.treeRootLabel}>{repoName}</span>{visibleTree.map((node) => <TreeItem key={node.name} node={node} path={node.name} expanded={expanded} onToggle={onToggleFolder} activeFile={activeFile} onSelect={onSelectFile} />)}</div>

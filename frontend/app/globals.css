@@ -37,3 +37,15 @@ textarea {
 button {
   cursor: pointer;
 }
+
+.scroller-y {
+    overflow-y: auto;
+}
+
+.scroller-x {
+    overflow-x: auto;
+}
+
+.scroller-x, .scroller-y {
+    scrollbar-width: thin;
+}

@@ -105,7 +105,7 @@ export function Workspace({ repository: routeRepository, client = apiClient }: W
   return (
     <main className={styles.appShell}>
       <Sidebar repoName={workspace.repository.name} branch={workspace.repository.default_branch} />
-      <section className={styles.workspace}>
+      <section className={`${styles.workspace} scroller-y`}>
         <WorkspaceHeader repoName={workspace.repository.name} isIndexing={isIndexing} indexProgress={job.progress} jobStatus={job.status} />
         {indexing.error && <div className={styles.workspaceNotice} role="alert"><span>{indexing.error}</span><button disabled={indexing.isRestarting} onClick={() => void indexing.restart()}>Retry</button></div>}
         {chat.resetError && <div className={styles.workspaceNotice} role="alert"><span>{chat.resetError}</span><button onClick={() => void chat.resetConversation()}>Retry new chat</button></div>}
