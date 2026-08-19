@@ -71,6 +71,36 @@ in your shell): `backend/.env.example` and `frontend/.env.example`.
 | `DEMO_JOB_DURATION_SECONDS` | `1.2` | Positive duration for deterministic demo jobs. |
 | `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:8000` | Frontend API base URL. |
 
+## PostgreSQL development service
+
+The repository includes a PostgreSQL 17 service with the pgvector extension
+available for database migrations and future vector indexes. Start it from the
+repository root:
+
+```bash
+docker compose up -d db
+```
+
+Check its status with `docker compose ps` or wait for the health check to report
+`healthy`. The service uses these local-development defaults:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `POSTGRES_DB` | `catch_up` | Database name. |
+| `POSTGRES_USER` | `catch_up` | Database user. |
+| `POSTGRES_PASSWORD` | `catch_up` | Local-development password. |
+| `POSTGRES_PORT` | `5432` | Host port forwarded to PostgreSQL. |
+
+Override these variables in the shell before starting Compose when needed. The
+database data is stored in the named `catch_up_postgres_data` volume. Stop the
+service with `docker compose stop db`, or stop and remove the container with
+`docker compose down`; both commands preserve the named volume. Do not add
+`--volumes` to `docker compose down` unless you intentionally want to delete the
+local database data.
+
+The image contains pgvector, but the `vector` extension is enabled by the
+Alembic migration rather than by the container startup command.
+
 The backend validates its settings before binding. Invalid values terminate the
 launcher with a JSON log entry that explains the setting and valid range.
 Every response includes `X-Request-ID`; a valid inbound value is preserved,

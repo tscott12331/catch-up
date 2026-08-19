@@ -1,0 +1,4 @@
+Alembic migration scripts for the Catch-up backend.
+
+The environment reads DATABASE_URL when set. For local Compose development,
+the documented default is postgresql+psycopg://catch_up:catch_up@localhost:5432/catch_up.

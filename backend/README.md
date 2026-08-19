@@ -27,6 +27,38 @@ Configuration:
 - `NEXT_PUBLIC_API_BASE_URL` belongs to the frontend and points at this API,
   defaulting to `http://localhost:8000`.
 
+## PostgreSQL migrations
+
+Start the root Compose database before applying migrations:
+
+```bash
+docker compose up -d db
+uv run --project backend alembic -c backend/alembic.ini upgrade head
+```
+
+Alembic reads `DATABASE_URL` when it is set. Otherwise it uses the local host
+default `postgresql+psycopg://catch_up:catch_up@localhost:5432/catch_up`.
+Credentials are intentionally not stored in `alembic.ini`.
+
+Useful migration commands, run from the repository root:
+
+```bash
+uv run --project backend alembic -c backend/alembic.ini downgrade -1
+uv run --project backend alembic -c backend/alembic.ini revision --autogenerate -m "<message>"
+```
+
+The initial migration enables the PostgreSQL `vector` extension and creates the
+repository, snapshot, source-file, and deduplicated source-blob tables. The
+extension is shared infrastructure and is intentionally retained on downgrade.
+
+The live migration smoke test is opt-in because it creates and drops a
+disposable PostgreSQL database. Start Compose, then run:
+
+```bash
+$env:RUN_POSTGRES_MIGRATION_TESTS = "1"  # PowerShell
+uv run --project backend pytest backend/tests/integration/test_migrations.py -q
+```
+
 ## Endpoints
 
 - `GET /health`
